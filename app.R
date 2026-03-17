@@ -5,12 +5,17 @@
 
 library(shiny)
 library(shinydashboard)
-library(DBI)
-library(RPostgres)
 library(DT)
 library(httr)
 library(jsonlite)
 library(plotly)
+
+# PostgreSQL — yalniz movcud olduqda yukle
+DB_AVAILABLE <- tryCatch({
+  library(DBI)
+  library(RPostgres)
+  TRUE
+}, error = function(e) FALSE)
 
 # --- .env faylından konfiqurasiya oxumaq ---
 env_file <- file.path(getwd(), ".env")
@@ -44,10 +49,33 @@ CLAUDE_ENDPOINT <- "https://api.anthropic.com/v1/messages"
 
 # --- Bazaya qoşulma funksiyası ---
 get_con <- function() {
-  dbConnect(RPostgres::Postgres(),
-            dbname = DB_CONFIG$dbname, host = DB_CONFIG$host,
-            port = DB_CONFIG$port, user = DB_CONFIG$user,
-            password = DB_CONFIG$password)
+  if (!DB_AVAILABLE) return(NULL)
+  tryCatch(
+    dbConnect(RPostgres::Postgres(),
+              dbname = DB_CONFIG$dbname, host = DB_CONFIG$host,
+              port = DB_CONFIG$port, user = DB_CONFIG$user,
+              password = DB_CONFIG$password),
+    error = function(e) { DB_AVAILABLE <<- FALSE; NULL }
+  )
+}
+
+# --- CSV fallback (Binder ucun) ---
+CSV_MOVCUD <- NULL
+csv_path <- file.path(getwd(), "data", "movcud_standartlar_backup.csv")
+if (file.exists(csv_path)) {
+  CSV_MOVCUD <- read.csv(csv_path, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+  cat("   CSV yuklendi:", nrow(CSV_MOVCUD), "setir\n")
+}
+
+# DB ve ya CSV-den oxu
+db_query <- function(query_fn, csv_fallback_fn) {
+  con <- get_con()
+  if (!is.null(con)) {
+    on.exit(dbDisconnect(con))
+    tryCatch(query_fn(con), error = function(e) csv_fallback_fn())
+  } else {
+    csv_fallback_fn()
+  }
 }
 
 # --- CEFR xəritəsi ---
@@ -388,49 +416,62 @@ server <- function(input, output, session) {
 
   # --- Reaktiv melumat ---
   data_yenilenmi <- reactive({
-    con <- get_con()
-    on.exit(dbDisconnect(con))
-
-    query <- sprintf("SELECT * FROM yenilenmi_standartlar WHERE sinif = %s", input$sinif_sec)
-    if (input$mezmun_sec != "all") {
-      query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", input$mezmun_sec))
-    }
-    if (input$deyisiklik_sec != "all") {
-      query <- paste0(query, sprintf(" AND deyisiklik_novu = '%s'", input$deyisiklik_sec))
-    }
-    query <- paste0(query, " ORDER BY mezmun_xetti, standart_kodu")
-    dbGetQuery(con, query)
+    db_query(
+      function(con) {
+        query <- sprintf("SELECT * FROM yenilenmi_standartlar WHERE sinif = %s", input$sinif_sec)
+        if (input$mezmun_sec != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", input$mezmun_sec))
+        if (input$deyisiklik_sec != "all") query <- paste0(query, sprintf(" AND deyisiklik_novu = '%s'", input$deyisiklik_sec))
+        dbGetQuery(con, paste0(query, " ORDER BY mezmun_xetti, standart_kodu"))
+      },
+      function() data.frame()
+    )
   })
 
   data_movcud <- reactive({
-    con <- get_con()
-    on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s ORDER BY mezmun_xetti, standart_kodu",
-                     input$sinif_sec)
-    dbGetQuery(con, query)
+    db_query(
+      function(con) {
+        dbGetQuery(con, sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s ORDER BY mezmun_xetti, standart_kodu",
+                                input$sinif_sec))
+      },
+      function() {
+        if (!is.null(CSV_MOVCUD)) {
+          df <- CSV_MOVCUD[CSV_MOVCUD$sinif == as.integer(input$sinif_sec), ]
+          df[order(df$mezmun_xetti, df$standart_kodu), ]
+        } else data.frame()
+      }
+    )
   })
 
   all_stats <- reactive({
-    con <- get_con()
-    on.exit(dbDisconnect(con))
-
-    # Əvvəlcə yenilenmi_standartlar yoxla, boşdursa movcud_standartlar-dan göstər
-    df <- dbGetQuery(con, "
-      SELECT sinif,
-        COUNT(*) as umumi,
-        COUNT(*) FILTER (WHERE deyisiklik_novu = 'movcud') as movcud,
-        COUNT(*) FILTER (WHERE deyisiklik_novu = 'yenilenib') as yenilenib,
-        COUNT(*) FILTER (WHERE deyisiklik_novu = 'yeni') as yeni,
-        COUNT(*) FILTER (WHERE deyisiklik_novu = 'silinib') as silinib
-      FROM yenilenmi_standartlar GROUP BY sinif ORDER BY sinif")
-
-    if (nrow(df) == 0) {
-      df <- dbGetQuery(con, "
-        SELECT sinif, COUNT(*) as umumi, COUNT(*) as movcud,
-               0 as yenilenib, 0 as yeni, 0 as silinib
-        FROM movcud_standartlar GROUP BY sinif ORDER BY sinif")
-    }
-    df
+    db_query(
+      function(con) {
+        df <- dbGetQuery(con, "
+          SELECT sinif,
+            COUNT(*) as umumi,
+            COUNT(*) FILTER (WHERE deyisiklik_novu = 'movcud') as movcud,
+            COUNT(*) FILTER (WHERE deyisiklik_novu = 'yenilenib') as yenilenib,
+            COUNT(*) FILTER (WHERE deyisiklik_novu = 'yeni') as yeni,
+            COUNT(*) FILTER (WHERE deyisiklik_novu = 'silinib') as silinib
+          FROM yenilenmi_standartlar GROUP BY sinif ORDER BY sinif")
+        if (nrow(df) == 0) {
+          df <- dbGetQuery(con, "
+            SELECT sinif, COUNT(*) as umumi, COUNT(*) as movcud,
+                   0 as yenilenib, 0 as yeni, 0 as silinib
+            FROM movcud_standartlar GROUP BY sinif ORDER BY sinif")
+        }
+        df
+      },
+      function() {
+        if (!is.null(CSV_MOVCUD)) {
+          agg <- aggregate(id ~ sinif, data = CSV_MOVCUD, FUN = length)
+          names(agg) <- c("sinif", "umumi")
+          agg$movcud <- agg$umumi
+          agg$yenilenib <- 0; agg$yeni <- 0; agg$silinib <- 0
+          agg[order(agg$sinif), ]
+        } else data.frame(sinif=integer(), umumi=integer(), movcud=integer(),
+                          yenilenib=integer(), yeni=integer(), silinib=integer())
+      }
+    )
   })
 
   # --- CEFR ---
@@ -512,14 +553,15 @@ server <- function(input, output, session) {
   })
 
   output$chart_cefr <- renderPlotly({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    df <- dbGetQuery(con, "
-      SELECT cefr_seviyyesi, COUNT(*) as say
-      FROM yenilenmi_standartlar
-      WHERE cefr_seviyyesi IS NOT NULL AND cefr_seviyyesi != ''
-      GROUP BY cefr_seviyyesi ORDER BY cefr_seviyyesi")
+    df <- db_query(
+      function(con) dbGetQuery(con, "
+        SELECT cefr_seviyyesi, COUNT(*) as say
+        FROM yenilenmi_standartlar
+        WHERE cefr_seviyyesi IS NOT NULL AND cefr_seviyyesi != ''
+        GROUP BY cefr_seviyyesi ORDER BY cefr_seviyyesi"),
+      function() data.frame()
+    )
     if (nrow(df) == 0) return(plotly_empty())
-
     plot_ly(df, x = ~cefr_seviyyesi, y = ~say, type = "bar",
             marker = list(color = c("#BBDEFB","#90CAF9","#42A5F5","#1976D2","#0D47A1"))) %>%
       layout(xaxis = list(title = "CEFR"), yaxis = list(title = "Say"),
@@ -527,14 +569,22 @@ server <- function(input, output, session) {
   })
 
   output$chart_bloom_all <- renderPlotly({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    df <- dbGetQuery(con, "
-      SELECT bloom_seviyyesi, COUNT(*) as say
-      FROM yenilenmi_standartlar
-      WHERE bloom_seviyyesi IS NOT NULL AND bloom_seviyyesi != ''
-      GROUP BY bloom_seviyyesi")
+    df <- db_query(
+      function(con) dbGetQuery(con, "
+        SELECT bloom_seviyyesi, COUNT(*) as say
+        FROM yenilenmi_standartlar
+        WHERE bloom_seviyyesi IS NOT NULL AND bloom_seviyyesi != ''
+        GROUP BY bloom_seviyyesi"),
+      function() {
+        if (!is.null(CSV_MOVCUD) && "bloom_seviyyesi" %in% names(CSV_MOVCUD)) {
+          bdf <- CSV_MOVCUD[!is.na(CSV_MOVCUD$bloom_seviyyesi) & nchar(CSV_MOVCUD$bloom_seviyyesi) > 0, ]
+          if (nrow(bdf) > 0) {
+            agg <- as.data.frame(table(bdf$bloom_seviyyesi)); names(agg) <- c("bloom_seviyyesi","say"); agg
+          } else data.frame()
+        } else data.frame()
+      }
+    )
     if (nrow(df) == 0) return(plotly_empty())
-
     plot_ly(df, labels = ~bloom_seviyyesi, values = ~say, type = "pie",
             textinfo = "label+percent") %>%
       layout(font = list(family = "Noto Sans"))
@@ -590,28 +640,32 @@ server <- function(input, output, session) {
   })
 
   output$dt_beynelxalq <- renderDT({
-    con <- get_con(); on.exit(dbDisconnect(con))
     sinif <- as.integer(input$sinif_sec)
-    df <- tryCatch({
-      dbGetQuery(con, sprintf("
-        SELECT cerceve_adi, kateqoriya, alt_kateqoriya, tesvir
-        FROM beynelxalq_cerceveler
-        WHERE %d BETWEEN SPLIT_PART(sinif_araligi, '-', 1)::int
-                    AND SPLIT_PART(sinif_araligi, '-', 2)::int
-        ORDER BY cerceve_adi", sinif))
-    }, error = function(e) data.frame())
+    df <- db_query(
+      function(con) {
+        dbGetQuery(con, sprintf("
+          SELECT cerceve_adi, kateqoriya, alt_kateqoriya, tesvir
+          FROM beynelxalq_cerceveler
+          WHERE %d BETWEEN SPLIT_PART(sinif_araligi, '-', 1)::int
+                      AND SPLIT_PART(sinif_araligi, '-', 2)::int
+          ORDER BY cerceve_adi", sinif))
+      },
+      function() data.frame()
+    )
     if (nrow(df) == 0) return(datatable(data.frame(Mesaj = "Melumat yoxdur")))
     datatable(df, options = list(pageLength = 15), rownames = FALSE,
               colnames = c("Cerceve", "Kateqoriya", "Alt kateqoriya", "Tesvir"))
   })
 
   output$dt_olkeler <- renderDT({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    query <- "SELECT olke, mezmun_xetti, standart_metni, xususi_yanasma FROM olke_standartlari"
-    if (input$olke_sec != "Hamisi") {
-      query <- paste0(query, sprintf(" WHERE olke = '%s'", input$olke_sec))
-    }
-    df <- tryCatch(dbGetQuery(con, query), error = function(e) data.frame())
+    df <- db_query(
+      function(con) {
+        query <- "SELECT olke, mezmun_xetti, standart_metni, xususi_yanasma FROM olke_standartlari"
+        if (input$olke_sec != "Hamisi") query <- paste0(query, sprintf(" WHERE olke = '%s'", input$olke_sec))
+        dbGetQuery(con, query)
+      },
+      function() data.frame()
+    )
     if (nrow(df) == 0) return(datatable(data.frame(Mesaj = "Melumat yoxdur")))
     datatable(df, options = list(pageLength = 10), rownames = FALSE,
               colnames = c("Olke", "Mezmun", "Standart", "Xususi yanasma"))
@@ -622,12 +676,22 @@ server <- function(input, output, session) {
     sinif <- input$sinif_sec
 
     # Movcud standartlari gotir
-    con <- get_con()
-    on.exit(dbDisconnect(con))
-    df <- dbGetQuery(con, sprintf("SELECT standart_kodu, standart_metni, alt_standart_kodu, alt_standart_metni,
-                                          mezmun_xetti, pisa_seviyyesi, pirls_kateqoriya, bloom_seviyyesi
-                                   FROM movcud_standartlar WHERE sinif = %s
-                                   ORDER BY mezmun_xetti, standart_kodu", sinif))
+    df <- db_query(
+      function(con) {
+        dbGetQuery(con, sprintf("SELECT standart_kodu, standart_metni, alt_standart_kodu, alt_standart_metni,
+                                        mezmun_xetti, pisa_seviyyesi, pirls_kateqoriya, bloom_seviyyesi
+                                 FROM movcud_standartlar WHERE sinif = %s
+                                 ORDER BY mezmun_xetti, standart_kodu", sinif))
+      },
+      function() {
+        if (!is.null(CSV_MOVCUD)) {
+          d <- CSV_MOVCUD[CSV_MOVCUD$sinif == as.integer(sinif), ]
+          cols <- intersect(c("standart_kodu","standart_metni","alt_standart_kodu","alt_standart_metni",
+                              "mezmun_xetti","pisa_seviyyesi","pirls_kateqoriya","bloom_seviyyesi"), names(d))
+          d[order(d$mezmun_xetti, d$standart_kodu), cols, drop=FALSE]
+        } else data.frame()
+      }
+    )
 
     if (nrow(df) == 0) {
       output$ai_result <- renderUI(tags$div(style="padding:30px;color:#dc2626;",
@@ -791,4 +855,7 @@ Cavabi HTML formatinda (sade HTML tagleri ile) ver.',
 }
 
 # --- ISE SALMAQ ---
+# Binder ucun PORT ve host deyisenleri
+port <- as.integer(Sys.getenv("PORT", "4567"))
+options(shiny.port = port, shiny.host = "0.0.0.0")
 shinyApp(ui, server)
