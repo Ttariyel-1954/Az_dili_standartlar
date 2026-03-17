@@ -43,7 +43,7 @@ DB_CONFIG <- list(
   password = Sys.getenv("DB_PASSWORD", "postgres")
 )
 
-CLAUDE_API_KEY <- Sys.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_API_KEY <- Sys.getenv("ANTHROPIC_API_KEY", "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")
 CLAUDE_MODEL <- Sys.getenv("DEFAULT_AI_MODEL", "claude-sonnet-4-20250514")
 CLAUDE_ENDPOINT <- "https://api.anthropic.com/v1/messages"
 
