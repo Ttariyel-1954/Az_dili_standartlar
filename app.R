@@ -18,21 +18,30 @@ DB_AVAILABLE <- tryCatch({
 }, error = function(e) FALSE)
 
 # --- .env faylından konfiqurasiya oxumaq ---
-env_file <- file.path(getwd(), ".env")
-if (file.exists(env_file)) {
-  env_lines <- readLines(env_file, warn = FALSE)
-  for (line in env_lines) {
-    line <- trimws(line)
-    if (nchar(line) == 0 || startsWith(line, "#")) next
-    parts <- strsplit(line, "=", fixed = TRUE)[[1]]
-    if (length(parts) >= 2) {
-      key <- trimws(parts[1])
-      val <- trimws(paste(parts[-1], collapse = "="))
-      do.call(Sys.setenv, setNames(list(val), key))
+env_paths <- c(
+  file.path(getwd(), ".env"),
+  ".env"
+)
+env_loaded <- FALSE
+for (env_file in env_paths) {
+  if (!is.na(env_file) && nchar(env_file) > 0 && file.exists(env_file)) {
+    env_lines <- readLines(env_file, warn = FALSE)
+    for (line in env_lines) {
+      line <- trimws(line)
+      if (nchar(line) == 0 || startsWith(line, "#")) next
+      parts <- strsplit(line, "=", fixed = TRUE)[[1]]
+      if (length(parts) >= 2) {
+        key <- trimws(parts[1])
+        val <- trimws(paste(parts[-1], collapse = "="))
+        do.call(Sys.setenv, setNames(list(val), key))
+      }
     }
+    env_loaded <- TRUE
+    cat("   .env faylı yükləndi:", env_file, "\n")
+    break
   }
-  cat("   .env faylı yükləndi\n")
 }
+if (!env_loaded) cat("   .env faylı tapılmadı, default dəyərlər istifadə olunur\n")
 
 # --- KONFİQURASİYA ---
 DB_CONFIG <- list(
@@ -43,9 +52,12 @@ DB_CONFIG <- list(
   password = Sys.getenv("DB_PASSWORD", "postgres")
 )
 
-CLAUDE_API_KEY_DEFAULT <- "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"
-CLAUDE_API_KEY_ENV <- Sys.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_API_KEY <- if (nchar(CLAUDE_API_KEY_ENV) >= 10) CLAUDE_API_KEY_ENV else CLAUDE_API_KEY_DEFAULT
+# API KEY - birbaşa kodda (shinyapps.io və Binder üçün)
+CLAUDE_API_KEY <- "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"
+# .env və ya environment variable varsa, ondan istifadə et
+env_key <- Sys.getenv("ANTHROPIC_API_KEY", "")
+if (nchar(env_key) >= 10) CLAUDE_API_KEY <- env_key
+cat("   API KEY mövcuddur:", nchar(CLAUDE_API_KEY), "simvol\n")
 CLAUDE_MODEL <- Sys.getenv("DEFAULT_AI_MODEL", "claude-sonnet-4-20250514")
 CLAUDE_ENDPOINT <- "https://api.anthropic.com/v1/messages"
 
