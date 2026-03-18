@@ -73,10 +73,28 @@ get_con <- function() {
 
 # --- CSV fallback (Binder ucun) ---
 CSV_MOVCUD <- NULL
+CSV_YENILENMI <- NULL
 csv_path <- file.path(getwd(), "data", "movcud_standartlar_backup.csv")
 if (file.exists(csv_path)) {
   CSV_MOVCUD <- read.csv(csv_path, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
   cat("   CSV yuklendi:", nrow(CSV_MOVCUD), "setir\n")
+  # Yenilenmi CSV-ni yoxla
+  csv_yen <- file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv")
+  if (file.exists(csv_yen)) {
+    tmp <- read.csv(csv_yen, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+    if (nrow(tmp) > 0) CSV_YENILENMI <- tmp
+  }
+  # Eger yenilenmi boshdursa, movcud-dan yarat
+  if (is.null(CSV_YENILENMI)) {
+    CSV_YENILENMI <- CSV_MOVCUD
+    CSV_YENILENMI$deyisiklik_novu <- "movcud"
+    if (!"esaslandirma" %in% names(CSV_YENILENMI)) CSV_YENILENMI$esaslandirma <- ""
+    if (!"beynelxalq_istinad" %in% names(CSV_YENILENMI)) CSV_YENILENMI$beynelxalq_istinad <- ""
+    if (!"cefr_seviyyesi" %in% names(CSV_YENILENMI)) {
+      CSV_YENILENMI$cefr_seviyyesi <- cefr_map[as.character(CSV_YENILENMI$sinif)]
+    }
+    cat("   Yenilenmi CSV movcud-dan yaradildi:", nrow(CSV_YENILENMI), "setir\n")
+  }
 }
 
 # DB ve ya CSV-den oxu
@@ -435,7 +453,14 @@ server <- function(input, output, session) {
         if (input$deyisiklik_sec != "all") query <- paste0(query, sprintf(" AND deyisiklik_novu = '%s'", input$deyisiklik_sec))
         dbGetQuery(con, paste0(query, " ORDER BY mezmun_xetti, standart_kodu"))
       },
-      function() data.frame()
+      function() {
+        if (!is.null(CSV_YENILENMI)) {
+          df <- CSV_YENILENMI[CSV_YENILENMI$sinif == as.integer(input$sinif_sec), ]
+          if (input$mezmun_sec != "all") df <- df[df$mezmun_xetti == input$mezmun_sec, ]
+          if (input$deyisiklik_sec != "all") df <- df[df$deyisiklik_novu == input$deyisiklik_sec, ]
+          df[order(df$mezmun_xetti, df$standart_kodu), ]
+        } else data.frame()
+      }
     )
   })
 
