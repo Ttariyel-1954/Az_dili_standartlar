@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azərbaycan Dili Standartları Dashboard — İstifadə Təlimatı</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans', sans-serif;
+    font-size: 17px;
+    line-height: 1.85;
+    color: #1e293b;
+    background: #f0f4f8;
+    padding: 0;
+  }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(135deg, #0D47A1 0%, #1565C0 40%, #1976D2 100%);
+    color: white;
+    padding: 60px 40px;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 34px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .hero p {
+    font-size: 19px;
+    color: #bbdefb;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .hero .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    margin-top: 16px;
+    color: #e3f2fd;
+  }
+
+  /* Container */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 30px 24px 60px;
+  }
+
+  /* TOC */
+  .toc {
+    background: white;
+    border-radius: 14px;
+    padding: 28px 34px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border-left: 5px solid #1976D2;
+  }
+  .toc h2 {
+    font-size: 22px;
+    color: #0D47A1;
+    margin-bottom: 14px;
+  }
+  .toc ol {
+    margin-left: 20px;
+  }
+  .toc li {
+    margin-bottom: 6px;
+  }
+  .toc a {
+    color: #1565C0;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .toc a:hover {
+    text-decoration: underline;
+  }
+
+  /* Section */
+  .section {
+    background: white;
+    border-radius: 14px;
+    padding: 32px 36px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border-top: 4px solid #1976D2;
+  }
+  .section h2 {
+    font-size: 24px;
+    color: #0D47A1;
+    margin-bottom: 8px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e3f2fd;
+  }
+  .section h3 {
+    font-size: 20px;
+    color: #1565C0;
+    margin-top: 22px;
+    margin-bottom: 8px;
+  }
+  .section p {
+    margin-bottom: 12px;
+  }
+  .section ul, .section ol {
+    margin-left: 24px;
+    margin-bottom: 14px;
+  }
+  .section li {
+    margin-bottom: 6px;
+  }
+
+  /* Subsection card */
+  .sub-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin: 14px 0;
+    border-left: 4px solid #42A5F5;
+  }
+  .sub-card.green { border-left-color: #4CAF50; }
+  .sub-card.orange { border-left-color: #FF9800; }
+  .sub-card.red { border-left-color: #F44336; }
+  .sub-card.purple { border-left-color: #9C27B0; }
+  .sub-card.teal { border-left-color: #00897B; }
+
+  .sub-card h4 {
+    font-size: 18px;
+    color: #0D47A1;
+    margin-bottom: 8px;
+  }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 16px;
+  }
+  th {
+    background: #1976D2;
+    color: white;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  tr:nth-child(even) { background: #f8fafc; }
+
+  /* Color swatches */
+  .color-swatch {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(0,0,0,0.1);
+  }
+
+  /* Key combination */
+  .key {
+    display: inline-block;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: monospace;
+    border: 1px solid #cbd5e1;
+  }
+
+  /* Icon label */
+  .icon-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #e3f2fd;
+    color: #0D47A1;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  /* Step */
+  .step {
+    display: flex;
+    gap: 16px;
+    margin: 14px 0;
+    align-items: flex-start;
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: #1976D2;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .step-text {
+    flex: 1;
+    padding-top: 4px;
+  }
+
+  /* Warning / Note / Tip */
+  .note {
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-size: 16px;
+  }
+  .note.warning {
+    background: #fff3e0;
+    border-color: #ffcc80;
+  }
+  .note.success {
+    background: #e8f5e9;
+    border-color: #a5d6a7;
+  }
+  .note.danger {
+    background: #ffebee;
+    border-color: #ef9a9a;
+  }
+  .note strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Screenshot placeholder */
+  .screenshot {
+    background: linear-gradient(135deg, #e3f2fd, #f0f4f8);
+    border: 2px dashed #90caf9;
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    color: #64748b;
+    font-size: 15px;
+    margin: 14px 0;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 14px;
+    padding: 30px 0;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 20px;
+  }
+
+  /* Print */
+  @media print {
+    .hero { padding: 30px 20px; }
+    .section { box-shadow: none; border: 1px solid #e2e8f0; }
+    body { font-size: 14px; background: white; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<div class="hero">
+  <h1>Azərbaycan Dili Standartları Dashboard</h1>
+  <p>İstifadə Təlimatı — Bütün pəncərə, düymə və funksiyaların ətraflı izahı</p>
+  <div class="badge">Versiya 1.0 | 2026-cı il | R Shiny Dashboard</div>
+</div>
+
+<div class="container">
+
+<!-- ==================== MÜNDƏRİCAT ==================== -->
+<div class="toc">
+  <h2>Mündəricat</h2>
+  <ol>
+    <li><a href="#giris">Ümumi Məlumat və Giriş</a></li>
+    <li><a href="#sol-panel">Sol Panel (Sidebar) — Filtr və Naviqasiya</a></li>
+    <li><a href="#ana-sehife">Ana Səhifə</a></li>
+    <li><a href="#standartlar">Standartlar Pəncərəsi</a></li>
+    <li><a href="#muqayise">Müqayisə Pəncərəsi</a></li>
+    <li><a href="#beynelxalq">Beynəlxalq Pəncərəsi</a></li>
+    <li><a href="#statistika">Statistika Pəncərəsi</a></li>
+    <li><a href="#ai-tehlil">Claude AI Təhlil Pəncərəsi</a></li>
+    <li><a href="#export">HTML Export Pəncərəsi</a></li>
+    <li><a href="#reng-sxemi">Rəng Sxemi və Statuslar</a></li>
+    <li><a href="#sual-cavab">Tez-tez Verilən Suallar</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 1. GİRİŞ ==================== -->
+<div class="section" id="giris">
+  <h2>1. Ümumi Məlumat və Giriş</h2>
+
+  <p>Bu dashboard Azərbaycan Respublikasında 1-11-ci siniflər üzrə <strong>Azərbaycan dili</strong> fənninin mövcud 442 alt standartını beynəlxalq tələblərə uyğun yeniləmək, təkmilləşdirmək və yeni standartlar əlavə etmək üçün nəzərdə tutulub.</p>
+
+  <h3>Dashboard nə edir?</h3>
+  <ul>
+    <li>Mövcud standartları <strong>PISA, PIRLS, CEFR, Bloom taksonomiyası</strong> prizmasından təhlil edir</li>
+    <li><strong>6 aparıcı ölkənin</strong> (Finlandiya, Sinqapur, Estoniya, Yaponiya, Kanada, İrlandiya) ana dili standartları ilə müqayisə edir</li>
+    <li>Hər standart üçün saxlanmalı / yenilənməli / silinməli qərarı verir</li>
+    <li>Yeni standart təklifləri irəli sürür</li>
+    <li><strong>Claude AI</strong> süni intellekti ilə avtomatik ətraflı təhlil aparır</li>
+  </ul>
+
+  <h3>Necə işə salınır?</h3>
+  <div class="sub-card">
+    <h4>Lokal kompüterdə</h4>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Terminal açın və layihə qovluğuna keçin: <code>cd ~/Desktop/Az_dili_standartlar</code></div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Dashboard-u işə salın: <code>Rscript -e "shiny::runApp('app.R', port=4567)"</code></div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Brauzerdə açın: <code>http://127.0.0.1:4567</code></div>
+    </div>
+  </div>
+
+  <div class="sub-card green">
+    <h4>Onlayn (heç nə quraşdırmadan)</h4>
+    <p><strong>ShinyApps.io:</strong> <a href="https://t01061954.shinyapps.io/Az_dili_standartlar/" target="_blank">t01061954.shinyapps.io/Az_dili_standartlar</a></p>
+    <p><strong>Binder:</strong> GitHub səhifəsindəki "launch binder" düyməsini basın</p>
+  </div>
+
+  <div class="note">
+    <strong>Qeyd:</strong> Onlayn versiyalarda (ShinyApps.io, Binder) PostgreSQL bazası olmadığı üçün məlumatlar CSV faylından oxunur. Bütün funksiyalar tam işləyir.
+  </div>
+</div>
+
+<!-- ==================== 2. SOL PANEL ==================== -->
+<div class="section" id="sol-panel">
+  <h2>2. Sol Panel (Sidebar) — Filtr və Naviqasiya</h2>
+
+  <p>Sol panel iki hissədən ibarətdir: <strong>naviqasiya menyusu</strong> və <strong>filtr parametrləri</strong>. Bu panel bütün pəncərələrə təsir edir.</p>
+
+  <h3>Naviqasiya Menyusu (7 bölmə)</h3>
+  <table>
+    <tr><th>Menyu elementi</th><th>İkon</th><th>Təyinatı</th></tr>
+    <tr><td><strong>Ana Səhifə</strong></td><td>🏠</td><td>Ümumi statistika və layihə haqqında məlumat</td></tr>
+    <tr><td><strong>Standartlar</strong></td><td>📖</td><td>Standartların ətraflı cədvəli, filtr düymələri ilə</td></tr>
+    <tr><td><strong>Müqayisə</strong></td><td>📊</td><td>Köhnə və yeni standartların yan-yana müqayisəsi</td></tr>
+    <tr><td><strong>Beynəlxalq</strong></td><td>🌍</td><td>PISA/PIRLS/CEFR uyğunluğu və 6 ölkə standartları</td></tr>
+    <tr><td><strong>Statistika</strong></td><td>📈</td><td>İnteraktiv qrafiklər — dəyişiklik, məzmun, CEFR, Bloom</td></tr>
+    <tr><td><strong>Claude AI Təhlil</strong></td><td>🤖</td><td>Süni intellektlə avtomatik standart təhlili</td></tr>
+    <tr><td><strong>HTML Export</strong></td><td>⬇️</td><td>Hesabat və məlumat yükləmə</td></tr>
+  </table>
+
+  <h3>Filtr Parametrləri</h3>
+  <p>Menyunun altında 3 filtr var. Bu filtrlər <strong>bütün pəncərələrə</strong> eyni anda təsir edir:</p>
+
+  <div class="sub-card">
+    <h4>🔽 Sinif seçin (1-11)</h4>
+    <p>Hansı sinifin standartlarını görmək istəyirsinizsə, onu seçin. Seçim dəyişdikdə bütün cədvəllər, qrafiklər və AI təhlili avtomatik yenilənir.</p>
+    <p><strong>Misal:</strong> "5-ci sinif" seçsəniz, yalnız 5-ci sinifə aid standartlar bütün pəncərələrdə görünəcək.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>🔽 Məzmun xətti</h4>
+    <p>Standartları 4 məzmun xəttinə görə süzün:</p>
+    <ul>
+      <li><strong>Hamısı</strong> — Bütün məzmun xətlərini göstər</li>
+      <li><strong>Dinləmə və danışma</strong> — Şifahi ünsiyyət bacarıqları (105 alt standart)</li>
+      <li><strong>Oxu</strong> — Oxu bacarıqları (120 alt standart)</li>
+      <li><strong>Yazı</strong> — Yazı bacarıqları (70 alt standart)</li>
+      <li><strong>Dil qaydaları</strong> — Qrammatik biliklər (147 alt standart)</li>
+    </ul>
+  </div>
+
+  <div class="sub-card">
+    <h4>🔽 Dəyişiklik növü</h4>
+    <p>Standartları statuslarına görə süzün:</p>
+    <ul>
+      <li><strong>Hamısı</strong> — Bütün statusları göstər</li>
+      <li><strong>Mövcud</strong> — Dəyişdirilməyən, olduğu kimi saxlanılan standartlar</li>
+      <li><strong>Yenilənib</strong> — Beynəlxalq tələblərə uyğun yenilənmiş standartlar</li>
+      <li><strong>Yeni</strong> — Əlavə edilmiş tamamilə yeni standartlar</li>
+      <li><strong>Silinib</strong> — Artıq lazım olmadığı üçün çıxarılmış standartlar</li>
+    </ul>
+  </div>
+
+  <div class="sub-card green">
+    <h4>CEFR Səviyyəsi göstəricisi</h4>
+    <p>Filtrlərin altında seçilmiş sinifə uyğun CEFR (Avropa Dil Çərçəvəsi) səviyyəsi avtomatik göstərilir:</p>
+    <table>
+      <tr><th>Siniflər</th><th>CEFR səviyyəsi</th><th>Mənası</th></tr>
+      <tr><td>1-2-ci sinif</td><td>A1</td><td>Başlanğıc — əsas söz və ifadələr</td></tr>
+      <tr><td>3-4-cü sinif</td><td>A2</td><td>Elementar — sadə cümlə və mətn</td></tr>
+      <tr><td>5-7-ci sinif</td><td>B1</td><td>Orta — müstəqil oxu və yazı</td></tr>
+      <tr><td>8-9-cu sinif</td><td>B2</td><td>Orta-yuxarı — mürəkkəb mətnlər</td></tr>
+      <tr><td>10-11-ci sinif</td><td>C1</td><td>Yüksək — akademik səviyyə</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== 3. ANA SƏHİFƏ ==================== -->
+<div class="section" id="ana-sehife">
+  <h2>3. Ana Səhifə</h2>
+
+  <p>Dashboard açıldığında ilk görünən pəncərədir. Layihənin ümumi vəziyyətini bir baxışda göstərir.</p>
+
+  <h3>Yuxarıdakı 4 Statistika Qutusu</h3>
+  <table>
+    <tr><th>Qutu</th><th>Rəng</th><th>Nə göstərir</th></tr>
+    <tr><td><strong>Ümumi Standart</strong></td><td><span class="color-swatch" style="background:#1976D2"></span>Mavi</td><td>Bütün siniflər üzrə standartların ümumi sayı</td></tr>
+    <tr><td><strong>Mövcud</strong></td><td><span class="color-swatch" style="background:#90CAF9"></span>Açıq mavi</td><td>Dəyişdirilmədən saxlanılan standartların sayı</td></tr>
+    <tr><td><strong>Yenilənib</strong></td><td><span class="color-swatch" style="background:#4CAF50"></span>Yaşıl</td><td>Beynəlxalq tələblərə uyğun yenilənmiş standartların sayı</td></tr>
+    <tr><td><strong>Yeni Əlavə</strong></td><td><span class="color-swatch" style="background:#FF9800"></span>Narıncı</td><td>Tamamilə yeni əlavə edilmiş standartların sayı</td></tr>
+  </table>
+  <div class="note">
+    <strong>Qeyd:</strong> Bu rəqəmlər bütün siniflər (1-11) üzrə ümumi göstəricidir. Hələ Claude AI təhlili aparılmayıbsa, bütün standartlar "Mövcud" statusunda olacaq.
+  </div>
+
+  <h3>Siniflər üzrə Standart Sayı (Bar Chart)</h3>
+  <p>Sol tərəfdə yerləşən interaktiv bar chart hər sinif üçün standartların sayını göstərir. Qrafikdə rənglər statusları əks etdirir:</p>
+  <ul>
+    <li><span class="color-swatch" style="background:#90CAF9"></span><strong>Açıq mavi</strong> — Mövcud standartlar</li>
+    <li><span class="color-swatch" style="background:#4CAF50"></span><strong>Yaşıl</strong> — Yenilənmiş standartlar</li>
+    <li><span class="color-swatch" style="background:#FF9800"></span><strong>Narıncı</strong> — Yeni əlavə edilmiş standartlar</li>
+  </ul>
+  <p>Qrafikin üzərinə mausla gəldikdə dəqiq rəqəmlər popup kimi görünür. Qrafiki böyütmək, kiçiltmək və PNG olaraq yükləmək mümkündür (sağ yuxarı küncdəki Plotly alətləri ilə).</p>
+
+  <h3>Layihə Haqqında (Məlumat paneli)</h3>
+  <p>Sağ tərəfdə layihənin qısa təsviri, istifadə olunan beynəlxalq çərçəvələr (PISA, PIRLS, CEFR, Bloom) və müqayisə olunan 6 ölkənin siyahısı verilir.</p>
+</div>
+
+<!-- ==================== 4. STANDARTLAR ==================== -->
+<div class="section" id="standartlar">
+  <h2>4. Standartlar Pəncərəsi</h2>
+
+  <p>Bu pəncərə seçilmiş sinif və məzmun xəttinə uyğun standartları ətraflı cədvəl formatında göstərir. Dashboard-un əsas iş pəncərəsidir.</p>
+
+  <h3>Filtr Düymələri (cədvəlin üstündə)</h3>
+  <p>Cədvəlin yuxarısında 5 filtr düyməsi var. Bu düymələr sol paneldəki "Dəyişiklik növü" filtri ilə eyni funksiyanı yerinə yetirir, lakin daha sürətli istifadə üçün nəzərdə tutulub:</p>
+
+  <table>
+    <tr><th>Düymə</th><th>Rəng</th><th>Funksiyası</th></tr>
+    <tr>
+      <td><strong>Hamısı</strong></td>
+      <td><span class="color-swatch" style="background:white; border:2px solid #1976D2;"></span>Ağ / mavi haşiyə</td>
+      <td>Bütün standartları (hər statusda) göstərir. Filtrləri sıfırlayır.</td>
+    </tr>
+    <tr>
+      <td><strong>Mövcud</strong></td>
+      <td><span class="color-swatch" style="background:#E3F2FD"></span>Açıq mavi</td>
+      <td>Yalnız dəyişdirilmədən saxlanılan standartları göstərir.</td>
+    </tr>
+    <tr>
+      <td><strong>Yenilənib</strong></td>
+      <td><span class="color-swatch" style="background:#E8F5E9"></span>Açıq yaşıl</td>
+      <td>Yalnız yenilənmiş standartları göstərir. Claude AI təhlilindən sonra dolacaq.</td>
+    </tr>
+    <tr>
+      <td><strong>Yeni</strong></td>
+      <td><span class="color-swatch" style="background:#FFF3E0"></span>Açıq narıncı</td>
+      <td>Yalnız yeni əlavə edilmiş standartları göstərir. Claude AI təhlilindən sonra dolacaq.</td>
+    </tr>
+    <tr>
+      <td><strong>Silinib</strong></td>
+      <td><span class="color-swatch" style="background:#FFEBEE"></span>Açıq qırmızı</td>
+      <td>Yalnız silinmiş standartları göstərir. Claude AI təhlilindən sonra dolacaq.</td>
+    </tr>
+  </table>
+
+  <div class="note warning">
+    <strong>Vacib:</strong> Hələ Claude AI təhlili aparılmayıbsa, "Yenilənib", "Yeni", "Silinib" düymələri "...statuslu standart yoxdur" mesajı göstərəcək. Bu normaldır — əvvəlcə "Claude AI Təhlil" pəncərəsindən təhlil aparın.
+  </div>
+
+  <h3>Cədvəl sütunları</h3>
+  <table>
+    <tr><th>Sütun</th><th>Məna</th><th>Misal</th></tr>
+    <tr><td><strong>Kod</strong></td><td>Standartın unikal kodu</td><td>1.1.1, 3.2.4</td></tr>
+    <tr><td><strong>Standart</strong></td><td>Əsas standartın tam mətni</td><td>"Dinlədiyini anlama"</td></tr>
+    <tr><td><strong>Alt standart</strong></td><td>Alt standartın ətraflı mətni</td><td>"Dinlədiyi mətnin məzmununu..."</td></tr>
+    <tr><td><strong>Məzmun xətti</strong></td><td>Hansı sahəyə aid olduğu</td><td>Dinləmə və danışma, Oxu, Yazı, Dil qaydaları</td></tr>
+    <tr><td><strong>Dəyişiklik</strong></td><td>Standartın statusu</td><td>mövcud, yenilənib, yeni, silinib</td></tr>
+    <tr><td><strong>Bloom</strong></td><td>Bloom taksonomiyası səviyyəsi</td><td>Xatırlama, Anlama, Tətbiq, Analiz...</td></tr>
+    <tr><td><strong>CEFR</strong></td><td>CEFR dil səviyyəsi</td><td>A1, A2, B1, B2, C1</td></tr>
+    <tr><td><strong>Əsaslandırma</strong></td><td>Niyə dəyişdiyinin izahı</td><td>"PISA oxu savadlılığına uyğun..."</td></tr>
+  </table>
+
+  <h3>Cədvəl funksiyaları</h3>
+  <ul>
+    <li><strong>Axtarış</strong> — Cədvəlin sağ yuxarısındakı axtarış xanasına söz yazaraq standartlar arasında axtarış aparın</li>
+    <li><strong>Sıralama</strong> — İstənilən sütun başlığına klikləyərək artan/azalan sıraya düzün</li>
+    <li><strong>Səhifələmə</strong> — Cədvəlin altında səhifə nömrələri ilə naviqasiya edin (hər səhifədə 20 sətir)</li>
+    <li><strong>Sətir sayı</strong> — Sol altdakı dropdown ilə hər səhifədə göstərilən sətir sayını dəyişin</li>
+  </ul>
+</div>
+
+<!-- ==================== 5. MÜQAYİSƏ ==================== -->
+<div class="section" id="muqayise">
+  <h2>5. Müqayisə Pəncərəsi</h2>
+
+  <p>Bu pəncərə köhnə (mövcud) və yeni (yenilənmiş) standartları <strong>yan-yana</strong> müqayisə etmək üçündür.</p>
+
+  <div class="sub-card">
+    <h4>Sol panel — Köhnə Standartlar (sarı haşiyə)</h4>
+    <p>Mövcud standartları göstərir — bunlar Azərbaycan dili kurikulumunun 2024-cü il versiyasıdır. Sütunlar:</p>
+    <ul>
+      <li>Standart kodu</li>
+      <li>Standart mətni</li>
+      <li>Alt standart mətni</li>
+      <li>Məzmun xətti</li>
+    </ul>
+  </div>
+
+  <div class="sub-card green">
+    <h4>Sağ panel — Yeni Standartlar (yaşıl haşiyə)</h4>
+    <p>Claude AI tərəfindən təhlil edilmiş və yenilənmiş standartları göstərir. Əlavə sütunlar:</p>
+    <ul>
+      <li>Dəyişiklik növü (mövcud/yenilənib/yeni/silinib) — rəng kodlaması ilə</li>
+      <li>Əsaslandırma — dəyişikliyin səbəbi</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>Necə istifadə olunur:</strong> Sol paneldən köhnə standartı tapın, sağ paneldən eyni kodlu yeni standarta baxın. Fərqi müqayisə edin. Hər iki cədvəldə axtarış funksiyası var — eyni kodu yazaraq sürətli müqayisə aparın.
+  </div>
+</div>
+
+<!-- ==================== 6. BEYNƏLXALQ ==================== -->
+<div class="section" id="beynelxalq">
+  <h2>6. Beynəlxalq Pəncərəsi</h2>
+
+  <p>Bu pəncərə Azərbaycan standartlarının beynəlxalq çərçəvələr və dünya ölkələrinin standartları ilə əlaqəsini göstərir. 3 bölmədən ibarətdir.</p>
+
+  <div class="sub-card">
+    <h4>PISA/PIRLS/CEFR Uyğunluğu (sol, böyük cədvəl)</h4>
+    <p>Seçilmiş sinif üçün hansı beynəlxalq çərçəvə kateqoriyalarının tətbiq olunduğunu göstərir:</p>
+    <ul>
+      <li><strong>PISA</strong> — Məlumat əldə etmə, interpretasiya, qiymətləndirmə</li>
+      <li><strong>PIRLS</strong> — Faktoloji anlama, nəticə çıxarma, inteqrasiya, qiymətləndirmə</li>
+      <li><strong>CEFR</strong> — Sinifə uyğun dil səviyyəsi (A1-C1)</li>
+      <li><strong>Bloom</strong> — Düşüncə bacarığı səviyyələri</li>
+    </ul>
+    <p>Sinif dəyişdikdə cədvəl avtomatik yenilənir — hər sinifə uyğun çərçəvələr göstərilir.</p>
+  </div>
+
+  <div class="sub-card orange">
+    <h4>Ölkə Standartları (sağ, kiçik cədvəl)</h4>
+    <p>6 aparıcı ölkənin ana dili standartlarını göstərir. Yuxarıdakı <strong>"Ölkə seçin"</strong> dropdown ilə filtrlənir:</p>
+    <table>
+      <tr><th>Ölkə</th><th>Xüsusi yanaşma</th></tr>
+      <tr><td>Finlandiya</td><td>Fənlərarası oxu, media savadlılığı</td></tr>
+      <tr><td>Sinqapur</td><td>STELLAR proqramı, kommunikativ yanaşma</td></tr>
+      <tr><td>Estoniya</td><td>Rəqəmsal savadlılıq, mədəniyyətlərarası kommunikasiya</td></tr>
+      <tr><td>Yaponiya</td><td>Dərin oxu, estetik duyum, yaradıcı ifadə</td></tr>
+      <tr><td>Kanada</td><td>Diferensial öyrənmə, inklüziv yanaşma</td></tr>
+      <tr><td>İrlandiya</td><td>İkidilli yanaşma, rəqəmsal mətn yaratma</td></tr>
+    </table>
+    <p><strong>"Hamısı"</strong> seçsəniz, bütün 6 ölkə eyni anda göstərilir.</p>
+  </div>
+
+  <div class="sub-card purple">
+    <h4>Bloom Taksonomiyası Paylanması (alt hissə, bar chart)</h4>
+    <p>Seçilmiş sinifin standartlarının Bloom taksonomiyası səviyyələrinə görə paylanmasını göstərir. 6 səviyyə:</p>
+    <ol>
+      <li><strong>Xatırlama</strong> — Məlumatı tanıma, yadda saxlama</li>
+      <li><strong>Anlama</strong> — Mənanı izah etmə, ümumiləşdirmə</li>
+      <li><strong>Tətbiq</strong> — Bilikləri yeni vəziyyətdə istifadə etmə</li>
+      <li><strong>Analiz</strong> — Hissələrə ayırma, əlaqə qurmaq</li>
+      <li><strong>Qiymətləndirmə</strong> — Mühakimə, tənqidi düşüncə</li>
+      <li><strong>Yaratma</strong> — Yeni məzmun, məhsul yaratma</li>
+    </ol>
+    <p>İdeal halda, yüksək siniflərdə "Analiz", "Qiymətləndirmə", "Yaratma" səviyyələri daha çox olmalıdır.</p>
+  </div>
+</div>
+
+<!-- ==================== 7. STATİSTİKA ==================== -->
+<div class="section" id="statistika">
+  <h2>7. Statistika Pəncərəsi</h2>
+
+  <p>Bu pəncərə 4 interaktiv qrafik vasitəsilə standartların ətraflı statistik təhlilini göstərir.</p>
+
+  <div class="sub-card">
+    <h4>Dəyişiklik Növləri üzrə Paylanma (Pie Chart — sol yuxarı)</h4>
+    <p>Dairəvi diaqramda standartların neçə faizinin mövcud qaldığını, neçə faizinin yeniləndiyini, yeni əlavə edildiyini və silindiyini göstərir.</p>
+    <ul>
+      <li><span class="color-swatch" style="background:#90CAF9"></span>Mövcud — dəyişməyənlər</li>
+      <li><span class="color-swatch" style="background:#4CAF50"></span>Yenilənib — təkmilləşdirilənlər</li>
+      <li><span class="color-swatch" style="background:#FF9800"></span>Yeni — əlavə edilənlər</li>
+      <li><span class="color-swatch" style="background:#F44336"></span>Silinib — çıxarılanlar</li>
+    </ul>
+  </div>
+
+  <div class="sub-card green">
+    <h4>Məzmun Xətləri üzrə (Bar Chart — sağ yuxarı)</h4>
+    <p>Hər məzmun xəttindəki standart sayını müqayisəli bar chart ilə göstərir: Dinləmə və danışma, Oxu, Yazı, Dil qaydaları.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>CEFR Səviyyələri üzrə (Bar Chart — sol alt)</h4>
+    <p>Standartların CEFR səviyyələrinə (A1, A2, B1, B2, C1) görə paylanmasını göstərir. Bütün siniflərin məlumatlarını əhatə edir.</p>
+  </div>
+
+  <div class="sub-card purple">
+    <h4>Bloom Səviyyələri üzrə (Pie Chart — sağ alt)</h4>
+    <p>Bütün standartların Bloom taksonomiyası səviyyələrinə görə faiz paylanmasını göstərir.</p>
+  </div>
+
+  <div class="note success">
+    <strong>İnteraktivlik:</strong> Bütün qrafiklər Plotly texnologiyası ilə hazırlanıb. Qrafiklərin üzərinə gəldikdə dəqiq rəqəmlər görünür. Sağ yuxarı küncdəki alət paneli ilə zoom, pan, PNG yükləmə mümkündür.
+  </div>
+</div>
+
+<!-- ==================== 8. CLAUDE AI TƏHLİL ==================== -->
+<div class="section" id="ai-tehlil">
+  <h2>8. Claude AI Təhlil Pəncərəsi</h2>
+
+  <p>Bu pəncərə dashboard-un <strong>ən vacib funksiyasıdır</strong>. Claude süni intellekti seçilmiş sinif üçün bütün standartları ətraflı təhlil edir, müqayisə aparır və yeniləmə təklifləri verir.</p>
+
+  <h3>Təhlili necə başlatmalı?</h3>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-text">Sol paneldən təhlil etmək istədiyiniz <strong>sinifi seçin</strong> (məs: 5-ci sinif)</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-text"><strong>"Təhlil et"</strong> düyməsini basın (mavi düymə, robot ikonu ilə)</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-text">Gözləyin — təhlil adətən <strong>30-120 saniyə</strong> çəkir</div>
+  </div>
+
+  <h3>Təhlil prosesində nə görünür?</h3>
+
+  <div class="sub-card green">
+    <h4>Canlı Taymer Paneli</h4>
+    <p>Təhlil başladıqda tünd fonda böyük yaşıl taymer paneli görünür:</p>
+    <ul>
+      <li><strong>Yaşıl nöqtə (yanıb-sönən)</strong> — AI-ın işləməsini göstərir</li>
+      <li><strong>Böyük sayğac (MM:SS formatı)</strong> — Keçən vaxtı saniyəlik göstərir</li>
+      <li><strong>Başlama vaxtı</strong> — Təhlilin nə vaxt başladığı</li>
+      <li><strong>Məlumat kartları</strong> — Sinif, standart sayı, model adı</li>
+    </ul>
+  </div>
+
+  <div class="sub-card">
+    <h4>Token Göstəricisi</h4>
+    <p>Taymer panelinin altında sarı fonda "AI işləyir..." yazısı görünür. Təhlil bitdikdə yaşıl fona keçir və aşağıdakıları göstərir:</p>
+    <ul>
+      <li><strong>Vaxt</strong> — Təhlilin neçə saniyə çəkdiyi</li>
+      <li><strong>Token sayı</strong> — Neçə söz/simvol emal olunduğu</li>
+      <li><strong>Təxmini qiymət</strong> — Dollar ilə API xərci</li>
+    </ul>
+  </div>
+
+  <h3>Təhlil bitdikdən sonra nə görünür?</h3>
+
+  <div class="sub-card">
+    <h4>AI Nəticəsi (ağ fonda ətraflı hesabat)</h4>
+    <p>Claude AI aşağıdakıları əhatə edən ətraflı HTML hesabat qaytarır:</p>
+    <ol>
+      <li>Seçilmiş sinif üçün <strong>ümumi qiymətləndirmə</strong></li>
+      <li><strong>PISA/PIRLS</strong> tələblərinə uyğunluq dərəcəsi</li>
+      <li><strong>Bloom taksonomiyası</strong> balansının təhlili</li>
+      <li>Hansı sahələrin <strong>güclü</strong>, hansıların <strong>zəif</strong> olduğu</li>
+      <li>Hər standart üçün <strong>yeniləmə təklifləri</strong></li>
+      <li><strong>Yeni standart</strong> təklifləri</li>
+      <li>CEFR səviyyəsinə <strong>uyğunluq</strong> təhlili</li>
+    </ol>
+  </div>
+
+  <div class="sub-card orange">
+    <h4>Generasiya Statistikası (tünd fonda)</h4>
+    <p>Nəticənin altında generasiya statistikası paneli görünür:</p>
+    <table>
+      <tr><th>Göstərici</th><th>Rəng</th><th>Məna</th></tr>
+      <tr><td>Vaxt</td><td><span class="color-swatch" style="background:#66BB6A"></span>Yaşıl</td><td>Təhlilin neçə saniyə çəkdiyi</td></tr>
+      <tr><td>Giriş token</td><td><span class="color-swatch" style="background:#4ade80"></span>Açıq yaşıl</td><td>AI-a göndərilən məlumatın həcmi</td></tr>
+      <tr><td>Çıxış token</td><td><span class="color-swatch" style="background:#fbbf24"></span>Sarı</td><td>AI-ın qaytardığı cavabın həcmi</td></tr>
+      <tr><td>Cəmi token</td><td><span class="color-swatch" style="background:#f87171"></span>Qırmızı</td><td>Ümumi emal həcmi</td></tr>
+      <tr><td>Təxmini qiymət</td><td><span class="color-swatch" style="background:#c4b5fd"></span>Bənövşəyi</td><td>API xərci (dollar)</td></tr>
+    </table>
+  </div>
+
+  <div class="sub-card green">
+    <h4>Avtomatik HTML Saxlama</h4>
+    <p>Hər təhlil avtomatik olaraq <code>html_reports/</code> qovluğuna yazılır:</p>
+    <p><code>html_reports/sinif_N_tehlil.html</code> (N = sinif nömrəsi)</p>
+    <p>Bu fayl brauzerdə açıla, çap oluna və paylaşıla bilər.</p>
+  </div>
+
+  <div class="note danger">
+    <strong>Diqqət:</strong> Hər təhlil API xərci yaradır. Təxmini qiymət: bir sinifin təhlili $0.05-$0.15 arasında dəyişir. 11 sinifin hamısını təhlil etsəniz, ümumi xərc təxminən $1-$2 olacaq.
+  </div>
+
+  <div class="note warning">
+    <strong>Xəta halında:</strong> Əgər "Xəta baş verdi" mesajı görünsə, bu adətən API açarının etibarsız olması və ya internet bağlantısı problemi ilə bağlıdır. .env faylındakı ANTHROPIC_API_KEY dəyərini yoxlayın.
+  </div>
+</div>
+
+<!-- ==================== 9. EXPORT ==================== -->
+<div class="section" id="export">
+  <h2>9. HTML Export Pəncərəsi</h2>
+
+  <p>Bu pəncərədən hesabat və məlumat yükləyə bilərsiniz. İki yükləmə seçimi var:</p>
+
+  <div class="sub-card">
+    <h4>"HTML Yüklə" düyməsi (mavi)</h4>
+    <p>Sol paneldə seçilmiş sinif üçün HTML formatında hesabat yükləyir. Bu hesabat:</p>
+    <ul>
+      <li>Brauzerdə açılır</li>
+      <li>Çap üçün optimallaşdırılıb</li>
+      <li>Rəng kodlaması ilə standartları göstərir</li>
+      <li>Oflayn istifadə oluna bilər</li>
+    </ul>
+    <div class="note warning">
+      <strong>Qeyd:</strong> HTML hesabat yalnız əvvəlcədən <code>scripts/03_generate_html.R</code> skripti və ya Claude AI təhlili ilə yaradılıbsa mövcuddur.
+    </div>
+  </div>
+
+  <div class="sub-card green">
+    <h4>"CSV Yüklə" düyməsi (açıq mavi)</h4>
+    <p>Seçilmiş sinifin bütün standartlarını CSV (comma-separated values) formatında yükləyir. Bu fayl:</p>
+    <ul>
+      <li>Microsoft Excel, Google Sheets-də açılır</li>
+      <li>Məlumat təhlili üçün istifadə oluna bilər</li>
+      <li>Digər proqramlara import edilə bilər</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ==================== 10. RƏNG SXEMİ ==================== -->
+<div class="section" id="reng-sxemi">
+  <h2>10. Rəng Sxemi və Statuslar</h2>
+
+  <p>Dashboard-da rənglər vacib məlumat daşıyır. Aşağıdakı cədvəl bütün rəng kodlarını izah edir:</p>
+
+  <h3>Status Rəngləri</h3>
+  <table>
+    <tr><th>Status</th><th>Cədvəl fonu</th><th>Rəng kodu</th><th>Məna</th></tr>
+    <tr>
+      <td><strong>Mövcud</strong></td>
+      <td><span class="color-swatch" style="background:#E3F2FD"></span>Açıq mavi</td>
+      <td>#E3F2FD</td>
+      <td>Standart dəyişdirilmədən saxlanılıb — beynəlxalq tələblərə uyğundur</td>
+    </tr>
+    <tr>
+      <td><strong>Yenilənib</strong></td>
+      <td><span class="color-swatch" style="background:#E8F5E9"></span>Açıq yaşıl</td>
+      <td>#E8F5E9</td>
+      <td>Standart yenilənib — mətni və ya əhatə dairəsi təkmilləşdirilib</td>
+    </tr>
+    <tr>
+      <td><strong>Yeni</strong></td>
+      <td><span class="color-swatch" style="background:#FFF3E0"></span>Açıq narıncı</td>
+      <td>#FFF3E0</td>
+      <td>Tamamilə yeni standart əlavə olunub — beynəlxalq təcrübəyə əsasən</td>
+    </tr>
+    <tr>
+      <td><strong>Silinib</strong></td>
+      <td><span class="color-swatch" style="background:#FFEBEE"></span>Açıq qırmızı + üstündən xətt</td>
+      <td>#FFEBEE</td>
+      <td>Standart artıq lazım deyil — digər standartlarla əhatə olunur və ya köhnəlib</td>
+    </tr>
+  </table>
+
+  <h3>İnterfeys Rəngləri</h3>
+  <table>
+    <tr><th>Element</th><th>Rəng</th><th>Kod</th></tr>
+    <tr><td>Əsas başlıq fonu</td><td><span class="color-swatch" style="background:#0D47A1"></span>Tünd mavi</td><td>#0D47A1</td></tr>
+    <tr><td>Naviqasiya paneli</td><td><span class="color-swatch" style="background:#1565C0"></span>Orta mavi</td><td>#1565C0</td></tr>
+    <tr><td>Qutu haşiyələri</td><td><span class="color-swatch" style="background:#1976D2"></span>Mavi</td><td>#1976D2</td></tr>
+    <tr><td>Arxa fon</td><td><span class="color-swatch" style="background:#f0f4f8"></span>Açıq boz-mavi</td><td>#f0f4f8</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 11. SUAL-CAVAB ==================== -->
+<div class="section" id="sual-cavab">
+  <h2>11. Tez-tez Verilən Suallar</h2>
+
+  <div class="sub-card">
+    <h4>S: "Yenilənib", "Yeni", "Silinib" düymələri niyə boşdur?</h4>
+    <p><strong>C:</strong> Bu statuslar Claude AI təhlilindən sonra yaranır. Əvvəlcə "Claude AI Təhlil" pəncərəsinə keçin, sinifi seçin və "Təhlil et" düyməsini basın. AI təhlili tamamladıqdan sonra bu statuslar dolacaq.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: "API key tapılmadı" xətası alıram. Nə edim?</h4>
+    <p><strong>C:</strong> Bu xəta <code>.env</code> faylında ANTHROPIC_API_KEY dəyərinin olmadığını göstərir. <code>.env</code> faylını yoxlayın və etibarlı API açarı əlavə edin. API açarını <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> saytından əldə edə bilərsiniz.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: Port 4567 artıq istifadə olunur xətası alıram</h4>
+    <p><strong>C:</strong> Terminal-da aşağıdakı əmri çalışdırın:</p>
+    <p><code>lsof -ti:4567 | xargs kill -9</code></p>
+    <p>Sonra dashboard-u yenidən işə salın.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: Qrafiklər boşdur, məlumat yoxdur. Nə etməliyəm?</h4>
+    <p><strong>C:</strong> Əgər PostgreSQL bazası yoxdursa (Binder və ya ShinyApps.io-da), məlumatlar CSV faylından oxunur. <code>data/movcud_standartlar_backup.csv</code> faylının mövcud olduğunu yoxlayın.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: AI təhlili çox uzun çəkir</h4>
+    <p><strong>C:</strong> Claude AI hər sinif üçün bütün standartları ətraflı təhlil edir. Bu proses 30-120 saniyə çəkə bilər. Canlı taymer prosesi izləməyə imkan verir. Əgər 5 dəqiqədən çox çəkirsə, internet bağlantısını yoxlayın.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: Nəticələr harada saxlanılır?</h4>
+    <p><strong>C:</strong> AI təhlil nəticələri avtomatik olaraq <code>html_reports/sinif_N_tehlil.html</code> faylına yazılır. Bu faylları istənilən brauzerdə açmaq və çap etmək mümkündür.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: Birdən çox sinifi eyni anda təhlil edə bilərəm?</h4>
+    <p><strong>C:</strong> Hər dəfə yalnız bir sinif təhlil oluna bilər. Bir sinifin təhlili bitdikdən sonra sol paneldən digər sinifi seçin və yenidən "Təhlil et" basın.</p>
+  </div>
+
+  <div class="sub-card">
+    <h4>S: Dashboard-u başqaları ilə necə paylaşa bilərəm?</h4>
+    <p><strong>C:</strong> Üç üsul var:</p>
+    <ol>
+      <li><strong>ShinyApps.io</strong> — <a href="https://t01061954.shinyapps.io/Az_dili_standartlar/" target="_blank">t01061954.shinyapps.io/Az_dili_standartlar</a> linkini göndərin</li>
+      <li><strong>Binder</strong> — GitHub README-dəki "launch binder" düyməsinin linkini göndərin</li>
+      <li><strong>Lokal</strong> — Layihəni GitHub-dan klonlayıb öz kompüterlərində işə salsınlar</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<div class="footer">
+  <p><strong>Layihə Rəhbəri:</strong> Talıbov Tariyel İsmayıl oğlu</p>
+  <p>Riyaziyyat üzrə fəlsəfə doktoru, Azərbaycan Respublikası Təhsil İnstitutunun direktor müavini</p>
+  <p style="margin-top: 10px;">2026-cı il | Azərbaycan Dili Standartlarının Yenilənməsi Layihəsi</p>
+</div>
+
+</div>
+</body>
+</html>
