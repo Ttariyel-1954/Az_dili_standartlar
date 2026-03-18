@@ -41,12 +41,41 @@ DB_CONFIG <- list(
 CLAUDE_API_KEY <- Sys.getenv("ANTHROPIC_API_KEY", "")
 cat("   API KEY:", if (nchar(CLAUDE_API_KEY) >= 10) paste0("mövcuddur (", nchar(CLAUDE_API_KEY), " simvol)") else "TAPILMADI", "\n")
 
-# --- Bazaya qoşulma funksiyası ---
+# --- Bazaya qoşulma funksiyası (CSV fallback ilə) ---
+USE_CSV <- FALSE
+tryCatch({
+  .test_con <- dbConnect(RPostgres::Postgres(),
+                         dbname = DB_CONFIG$dbname, host = DB_CONFIG$host,
+                         port = DB_CONFIG$port, user = DB_CONFIG$user,
+                         password = DB_CONFIG$password)
+  dbDisconnect(.test_con)
+  cat("   PostgreSQL: bağlantı uğurlu\n")
+}, error = function(e) {
+  USE_CSV <<- TRUE
+  cat("   PostgreSQL yoxdur, CSV rejimində işləyir\n")
+})
+
 get_con <- function() {
   dbConnect(RPostgres::Postgres(),
             dbname = DB_CONFIG$dbname, host = DB_CONFIG$host,
-            port = DB_CONFIG$port, user = DB_CONFIG$user, 
+            port = DB_CONFIG$port, user = DB_CONFIG$user,
             password = DB_CONFIG$password)
+}
+
+# CSV-dən data oxuma funksiyaları
+csv_movcud <- function() {
+  f <- file.path(getwd(), "data", "movcud_standartlar_backup.csv")
+  if (file.exists(f)) read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+  else data.frame()
+}
+
+csv_yenilenmi <- function() {
+  f <- file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv")
+  if (file.exists(f)) {
+    df <- read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+    if (nrow(df) == 0) return(data.frame())
+    df
+  } else data.frame()
 }
 
 # --- CEFR xəritəsi ---
@@ -605,11 +634,19 @@ server <- function(input, output, session) {
   observeEvent(input$filter_yeni, { updateSelectInput(session, "deyisiklik_sec", selected = "yeni") })
   observeEvent(input$filter_silinib, { updateSelectInput(session, "deyisiklik_sec", selected = "silinib") })
 
-  # --- Reaktiv məlumat ---
+  # --- Reaktiv məlumat (PostgreSQL + CSV fallback) ---
   data_yenilenmi <- reactive({
+    if (USE_CSV) {
+      df <- csv_yenilenmi()
+      if (nrow(df) == 0) return(df)
+      df <- df[df$sinif == as.integer(input$sinif_sec), , drop=FALSE]
+      if (input$mezmun_sec != "all") df <- df[df$mezmun_xetti == input$mezmun_sec, , drop=FALSE]
+      if (input$deyisiklik_sec != "all") df <- df[df$deyisiklik_novu == input$deyisiklik_sec, , drop=FALSE]
+      df <- df[order(df$mezmun_xetti, df$standart_kodu), ]
+      return(df)
+    }
     con <- get_con()
     on.exit(dbDisconnect(con))
-    
     query <- sprintf("SELECT * FROM yenilenmi_standartlar WHERE sinif = %s", input$sinif_sec)
     if (input$mezmun_sec != "all") {
       query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", input$mezmun_sec))
@@ -620,16 +657,48 @@ server <- function(input, output, session) {
     query <- paste0(query, " ORDER BY mezmun_xetti, standart_kodu")
     dbGetQuery(con, query)
   })
-  
+
   data_movcud <- reactive({
+    if (USE_CSV) {
+      df <- csv_movcud()
+      if (nrow(df) == 0) return(df)
+      df <- df[df$sinif == as.integer(input$sinif_sec), , drop=FALSE]
+      return(df[order(df$mezmun_xetti, df$standart_kodu), ])
+    }
     con <- get_con()
     on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s ORDER BY mezmun_xetti, standart_kodu", 
+    query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s ORDER BY mezmun_xetti, standart_kodu",
                      input$sinif_sec)
     dbGetQuery(con, query)
   })
-  
+
   all_stats <- reactive({
+    if (USE_CSV) {
+      df_m <- csv_movcud()
+      df_y <- csv_yenilenmi()
+      if (nrow(df_m) == 0) return(data.frame(sinif=integer(), umumi=integer(), movcud=integer(),
+                                              yenilenib=integer(), yeni=integer(), silinib=integer()))
+      agg_m <- aggregate(id ~ sinif, data = df_m, FUN = length)
+      names(agg_m) <- c("sinif", "movcud_say")
+      df <- agg_m
+      df$umumi <- df$movcud_say
+      df$movcud <- df$movcud_say
+      df$yenilenib <- 0L; df$yeni <- 0L; df$silinib <- 0L
+      if (nrow(df_y) > 0) {
+        for (s in unique(df_y$sinif)) {
+          idx <- which(df$sinif == s)
+          if (length(idx) > 0) {
+            sub <- df_y[df_y$sinif == s, , drop=FALSE]
+            df$yenilenib[idx] <- as.integer(sum(sub$deyisiklik_novu == "yenilenib", na.rm=TRUE))
+            df$yeni[idx] <- as.integer(sum(sub$deyisiklik_novu == "yeni", na.rm=TRUE))
+            df$silinib[idx] <- as.integer(sum(sub$deyisiklik_novu == "silinib", na.rm=TRUE))
+            df$umumi[idx] <- df$movcud_say[idx] + df$yeni[idx]
+          }
+        }
+      }
+      return(df[, c("sinif", "umumi", "movcud", "yenilenib", "yeni", "silinib")])
+    }
+
     con <- get_con()
     on.exit(dbDisconnect(con))
 
@@ -757,29 +826,47 @@ server <- function(input, output, session) {
   })
   
   output$chart_cefr <- renderPlotly({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    df <- dbGetQuery(con, "
-      SELECT cefr_seviyyesi, COUNT(*) as say 
-      FROM yenilenmi_standartlar 
-      WHERE cefr_seviyyesi IS NOT NULL AND cefr_seviyyesi != ''
-      GROUP BY cefr_seviyyesi ORDER BY cefr_seviyyesi")
+    if (USE_CSV) {
+      df_raw <- csv_yenilenmi()
+      if (nrow(df_raw) == 0 || !"cefr_seviyyesi" %in% names(df_raw)) return(plotly_empty(type = "bar"))
+      df_raw <- df_raw[!is.na(df_raw$cefr_seviyyesi) & df_raw$cefr_seviyyesi != "", ]
+      if (nrow(df_raw) == 0) return(plotly_empty(type = "bar"))
+      df <- as.data.frame(table(df_raw$cefr_seviyyesi), stringsAsFactors = FALSE)
+      names(df) <- c("cefr_seviyyesi", "say")
+    } else {
+      con <- get_con(); on.exit(dbDisconnect(con))
+      df <- dbGetQuery(con, "
+        SELECT cefr_seviyyesi, COUNT(*) as say
+        FROM yenilenmi_standartlar
+        WHERE cefr_seviyyesi IS NOT NULL AND cefr_seviyyesi != ''
+        GROUP BY cefr_seviyyesi ORDER BY cefr_seviyyesi")
+    }
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
-    
+
     plot_ly(df, x = ~cefr_seviyyesi, y = ~say, type = "bar",
             marker = list(color = c("#BBDEFB","#90CAF9","#42A5F5","#1976D2","#0D47A1"))) %>%
       layout(xaxis = list(title = "CEFR"), yaxis = list(title = "Say"),
              font = list(family = "Noto Sans"))
   })
-  
+
   output$chart_bloom_all <- renderPlotly({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    df <- dbGetQuery(con, "
-      SELECT bloom_seviyyesi, COUNT(*) as say 
-      FROM yenilenmi_standartlar 
-      WHERE bloom_seviyyesi IS NOT NULL AND bloom_seviyyesi != ''
-      GROUP BY bloom_seviyyesi")
+    if (USE_CSV) {
+      df_raw <- csv_yenilenmi()
+      if (nrow(df_raw) == 0 || !"bloom_seviyyesi" %in% names(df_raw)) return(plotly_empty(type = "bar"))
+      df_raw <- df_raw[!is.na(df_raw$bloom_seviyyesi) & df_raw$bloom_seviyyesi != "", ]
+      if (nrow(df_raw) == 0) return(plotly_empty(type = "bar"))
+      df <- as.data.frame(table(df_raw$bloom_seviyyesi), stringsAsFactors = FALSE)
+      names(df) <- c("bloom_seviyyesi", "say")
+    } else {
+      con <- get_con(); on.exit(dbDisconnect(con))
+      df <- dbGetQuery(con, "
+        SELECT bloom_seviyyesi, COUNT(*) as say
+        FROM yenilenmi_standartlar
+        WHERE bloom_seviyyesi IS NOT NULL AND bloom_seviyyesi != ''
+        GROUP BY bloom_seviyyesi")
+    }
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
-    
+
     plot_ly(df, labels = ~bloom_seviyyesi, values = ~say, type = "pie",
             textinfo = "label+percent") %>%
       layout(font = list(family = "Noto Sans"))
@@ -966,43 +1053,49 @@ server <- function(input, output, session) {
   })
   
   output$dt_beynelxalq <- renderDT({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    sinif <- as.integer(input$sinif_sec)
-    df <- dbGetQuery(con, sprintf("
-      SELECT cerceve_adi, kateqoriya, alt_kateqoriya, tesvir 
-      FROM beynelxalq_cerceveler 
-      WHERE %d BETWEEN SPLIT_PART(sinif_araligi, '-', 1)::int 
-                  AND SPLIT_PART(sinif_araligi, '-', 2)::int
-      ORDER BY cerceve_adi", sinif))
-    if (nrow(df) == 0) return(NULL)
-    datatable(df, options = list(pageLength = 15, scrollX = TRUE, autoWidth = FALSE,
-                columnDefs = list(
-                  list(width = '80px', targets = 0),
-                  list(width = '120px', targets = 1),
-                  list(width = '180px', targets = 2),
-                  list(width = '250px', targets = 3)
-                )),
-              rownames = FALSE,
-              colnames = c("Çərçəvə", "Kateqoriya", "Alt kateqoriya", "Təsvir"))
+    tryCatch({
+      if (USE_CSV) return(NULL)
+      con <- get_con(); on.exit(dbDisconnect(con))
+      sinif <- as.integer(input$sinif_sec)
+      df <- dbGetQuery(con, sprintf("
+        SELECT cerceve_adi, kateqoriya, alt_kateqoriya, tesvir
+        FROM beynelxalq_cerceveler
+        WHERE %d BETWEEN SPLIT_PART(sinif_araligi, '-', 1)::int
+                    AND SPLIT_PART(sinif_araligi, '-', 2)::int
+        ORDER BY cerceve_adi", sinif))
+      if (nrow(df) == 0) return(NULL)
+      datatable(df, options = list(pageLength = 15, scrollX = TRUE, autoWidth = FALSE,
+                  columnDefs = list(
+                    list(width = '80px', targets = 0),
+                    list(width = '120px', targets = 1),
+                    list(width = '180px', targets = 2),
+                    list(width = '250px', targets = 3)
+                  )),
+                rownames = FALSE,
+                colnames = c("Çərçəvə", "Kateqoriya", "Alt kateqoriya", "Təsvir"))
+    }, error = function(e) NULL)
   })
-  
+
   output$dt_olkeler <- renderDT({
-    con <- get_con(); on.exit(dbDisconnect(con))
-    query <- "SELECT olke, mezmun_xetti, standart_metni, xususi_yanaşma FROM olke_standartlari"
-    if (input$olke_sec != "Hamısı") {
-      query <- paste0(query, sprintf(" WHERE olke = '%s'", input$olke_sec))
-    }
-    df <- dbGetQuery(con, query)
-    if (nrow(df) == 0) return(NULL)
-    datatable(df, options = list(pageLength = 10, scrollX = TRUE, autoWidth = FALSE,
-                columnDefs = list(
-                  list(width = '90px', targets = 0),
-                  list(width = '90px', targets = 1),
-                  list(width = '250px', targets = 2),
-                  list(width = '200px', targets = 3)
-                )),
-              rownames = FALSE,
-              colnames = c("Ölkə", "Məzmun", "Standart", "Xüsusi yanaşma"))
+    tryCatch({
+      if (USE_CSV) return(NULL)
+      con <- get_con(); on.exit(dbDisconnect(con))
+      query <- "SELECT olke, mezmun_xetti, standart_metni, xususi_yanaşma FROM olke_standartlari"
+      if (input$olke_sec != "Hamısı") {
+        query <- paste0(query, sprintf(" WHERE olke = '%s'", input$olke_sec))
+      }
+      df <- dbGetQuery(con, query)
+      if (nrow(df) == 0) return(NULL)
+      datatable(df, options = list(pageLength = 10, scrollX = TRUE, autoWidth = FALSE,
+                  columnDefs = list(
+                    list(width = '90px', targets = 0),
+                    list(width = '90px', targets = 1),
+                    list(width = '250px', targets = 2),
+                    list(width = '200px', targets = 3)
+                  )),
+                rownames = FALSE,
+                colnames = c("Ölkə", "Məzmun", "Standart", "Xüsusi yanaşma"))
+    }, error = function(e) NULL)
   })
   
   # ============================================================
@@ -1012,11 +1105,20 @@ server <- function(input, output, session) {
     sinif <- input$sinif_sec
     mezmun <- input$mezmun_sec
 
-    con <- get_con(); on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s", sinif)
-    if (mezmun != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", mezmun))
-    query <- paste0(query, " ORDER BY mezmun_xetti, standart_kodu")
-    df <- dbGetQuery(con, query)
+    if (USE_CSV) {
+      df <- csv_movcud()
+      if (nrow(df) > 0) {
+        df <- df[df$sinif == as.integer(sinif), , drop=FALSE]
+        if (mezmun != "all") df <- df[df$mezmun_xetti == mezmun, , drop=FALSE]
+        df <- df[order(df$mezmun_xetti, df$standart_kodu), ]
+      }
+    } else {
+      con <- get_con(); on.exit(dbDisconnect(con))
+      query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s", sinif)
+      if (mezmun != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", mezmun))
+      query <- paste0(query, " ORDER BY mezmun_xetti, standart_kodu")
+      df <- dbGetQuery(con, query)
+    }
 
     if (nrow(df) == 0) {
       output$ai_result <- renderUI(tags$div(style="padding:30px;color:#dc2626;",
@@ -1544,10 +1646,19 @@ YALNIZ JSON, başqa heç nə yazma.',
     mezmun_label <- if (mezmun == "all") "bütün məzmun xətləri" else mezmun
 
     # Mövcud standartları kontekst kimi ver
-    con <- get_con(); on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT standart_kodu, standart_metni, mezmun_xetti FROM movcud_standartlar WHERE sinif = %s", sinif)
-    if (mezmun != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", mezmun))
-    df_existing <- dbGetQuery(con, query)
+    if (USE_CSV) {
+      df_existing <- csv_movcud()
+      if (nrow(df_existing) > 0) {
+        df_existing <- df_existing[df_existing$sinif == as.integer(sinif), , drop=FALSE]
+        if (mezmun != "all") df_existing <- df_existing[df_existing$mezmun_xetti == mezmun, , drop=FALSE]
+        df_existing <- df_existing[, c("standart_kodu","standart_metni","mezmun_xetti"), drop=FALSE]
+      }
+    } else {
+      con <- get_con(); on.exit(dbDisconnect(con))
+      query <- sprintf("SELECT standart_kodu, standart_metni, mezmun_xetti FROM movcud_standartlar WHERE sinif = %s", sinif)
+      if (mezmun != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", mezmun))
+      df_existing <- dbGetQuery(con, query)
+    }
 
     session$sendCustomMessage("ai_timer_start", list(
       target = "ai_timer_panel2",
@@ -1665,15 +1776,19 @@ YALNIZ JSON, başqa heç nə.',
     cefr_sev <- cefr_map[as.character(sinif)]
 
     tryCatch({
-      con <- get_con()
-      on.exit(dbDisconnect(con))
+      if (!USE_CSV) {
+        con <- get_con()
+        on.exit(dbDisconnect(con))
+      }
 
       # Yalnız seçilmiş məzmun xətti üçün sil
-      if (mezmun != "all") {
-        dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d AND mezmun_xetti = '%s'",
-                               sinif, gsub("'", "''", mezmun)))
-      } else {
-        dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d", sinif))
+      if (!USE_CSV) {
+        if (mezmun != "all") {
+          dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d AND mezmun_xetti = '%s'",
+                                 sinif, gsub("'", "''", mezmun)))
+        } else {
+          dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d", sinif))
+        }
       }
 
       # Yazılacaq sətirləri yığ: qalsin + dəyişənlər
@@ -1731,24 +1846,50 @@ YALNIZ JSON, başqa heç nə.',
       df_write$deyisiklik_novu[df_write$deyisiklik_novu == "yenilensin"] <- "yenilenib"
       df_write$deyisiklik_novu[df_write$deyisiklik_novu == "silinsin"] <- "silinib"
 
-      # Bazaya yaz
-      for (i in 1:nrow(df_write)) {
-        row <- df_write[i, ]
-        dbExecute(con, sprintf(
-          "INSERT INTO yenilenmi_standartlar (sinif, mezmun_xetti, standart_kodu, standart_metni,
-           alt_standart_kodu, alt_standart_metni, deyisiklik_novu, esaslandirma, bloom_seviyyesi, cefr_seviyyesi)
-           VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
-          sinif,
-          gsub("'", "''", as.character(row$mezmun_xetti)),
-          gsub("'", "''", as.character(row$standart_kodu)),
-          gsub("'", "''", as.character(row$standart_metni)),
-          gsub("'", "''", as.character(row$alt_standart_kodu)),
-          gsub("'", "''", as.character(row$alt_standart_metni)),
-          gsub("'", "''", as.character(row$deyisiklik_novu)),
-          gsub("'", "''", as.character(row$esaslandirma)),
-          gsub("'", "''", as.character(row$bloom_seviyyesi)),
-          gsub("'", "''", as.character(row$cefr_seviyyesi))
-        ))
+      # Bazaya / CSV-yə yaz
+      if (USE_CSV) {
+        # CSV rejimində — mövcud CSV-ni oxu, köhnə datanı sil, yenisini əlavə et
+        csv_path <- file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv")
+        df_old <- csv_yenilenmi()
+        if (nrow(df_old) > 0) {
+          if (mezmun != "all") {
+            df_old <- df_old[!(df_old$sinif == sinif & df_old$mezmun_xetti == mezmun), , drop=FALSE]
+          } else {
+            df_old <- df_old[df_old$sinif != sinif, , drop=FALSE]
+          }
+        }
+        # df_write sütunlarını uyğunlaşdır
+        write_cols <- c("sinif","mezmun_xetti","standart_kodu","standart_metni",
+                        "alt_standart_kodu","alt_standart_metni","deyisiklik_novu",
+                        "esaslandirma","bloom_seviyyesi","cefr_seviyyesi")
+        df_write_csv <- df_write[, intersect(write_cols, names(df_write)), drop=FALSE]
+        if (nrow(df_old) > 0) {
+          # Eyni sütunları saxla
+          common_cols <- intersect(names(df_old), names(df_write_csv))
+          df_combined <- rbind(df_old[, common_cols, drop=FALSE], df_write_csv[, common_cols, drop=FALSE])
+        } else {
+          df_combined <- df_write_csv
+        }
+        write.csv(df_combined, csv_path, row.names = FALSE, fileEncoding = "UTF-8")
+      } else {
+        for (i in 1:nrow(df_write)) {
+          row <- df_write[i, ]
+          dbExecute(con, sprintf(
+            "INSERT INTO yenilenmi_standartlar (sinif, mezmun_xetti, standart_kodu, standart_metni,
+             alt_standart_kodu, alt_standart_metni, deyisiklik_novu, esaslandirma, bloom_seviyyesi, cefr_seviyyesi)
+             VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
+            sinif,
+            gsub("'", "''", as.character(row$mezmun_xetti)),
+            gsub("'", "''", as.character(row$standart_kodu)),
+            gsub("'", "''", as.character(row$standart_metni)),
+            gsub("'", "''", as.character(row$alt_standart_kodu)),
+            gsub("'", "''", as.character(row$alt_standart_metni)),
+            gsub("'", "''", as.character(row$deyisiklik_novu)),
+            gsub("'", "''", as.character(row$esaslandirma)),
+            gsub("'", "''", as.character(row$bloom_seviyyesi)),
+            gsub("'", "''", as.character(row$cefr_seviyyesi))
+          ))
+        }
       }
 
       n_movcud <- sum(df_write$deyisiklik_novu == "movcud", na.rm=TRUE)
@@ -1756,9 +1897,10 @@ YALNIZ JSON, başqa heç nə.',
       n_yeni <- sum(df_write$deyisiklik_novu == "yeni", na.rm=TRUE)
       n_silinib <- sum(df_write$deyisiklik_novu == "silinib", na.rm=TRUE)
 
+      save_target <- if (USE_CSV) "CSV faylına" else "PostgreSQL bazasına"
       output$step3_status <- renderUI(
         tags$div(style="padding:20px;background:#dcfce7;border:2px solid #4CAF50;border-radius:12px;",
-          tags$h4(style="color:#166534;margin:0 0 10px 0;", "✅ PostgreSQL bazasına uğurla yazıldı!"),
+          tags$h4(style="color:#166534;margin:0 0 10px 0;", sprintf("✅ %s uğurla yazıldı!", save_target)),
           tags$p(style="font-size:16px;color:#166534;margin:0;",
             sprintf("Sinif %d: Cəmi %d standart yazıldı — Mövcud: %d, Yenilənib: %d, Yeni: %d, Silinib: %d",
                     sinif, nrow(df_write), n_movcud, n_yenilenib, n_yeni, n_silinib)),
@@ -1768,7 +1910,16 @@ YALNIZ JSON, başqa heç nə.',
             "📊 'Müqayisə' tab-ında köhnə və yeni standartları yan-yana müqayisə edə bilərsiniz.")
         )
       )
-      showNotification(sprintf("✅ Sinif %d: %d standart PostgreSQL-ə yazıldı!", sinif, nrow(df_write)), type = "message", duration = 10)
+      showNotification(sprintf("✅ Sinif %d: %d standart %s yazıldı!", sinif, nrow(df_write), save_target), type = "message", duration = 10)
+
+      # CSV backup-ları da yenilə (yalnız PostgreSQL rejimində)
+      if (!USE_CSV) tryCatch({
+        df_all_m <- dbGetQuery(con, "SELECT * FROM movcud_standartlar ORDER BY sinif, mezmun_xetti, standart_kodu")
+        df_all_y <- dbGetQuery(con, "SELECT * FROM yenilenmi_standartlar ORDER BY sinif, mezmun_xetti, standart_kodu")
+        write.csv(df_all_m, file.path(getwd(), "data", "movcud_standartlar_backup.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+        write.csv(df_all_y, file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+        cat("CSV backup yeniləndi\n")
+      }, error = function(e2) cat("CSV backup xətası:", e2$message, "\n"))
 
     }, error = function(e) {
       output$step3_status <- renderUI(
