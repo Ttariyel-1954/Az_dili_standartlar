@@ -22,6 +22,7 @@ env_paths <- c(
   file.path(getwd(), ".env"),
   ".env"
 )
+
 env_loaded <- FALSE
 for (env_file in env_paths) {
   if (!is.na(env_file) && nchar(env_file) > 0 && file.exists(env_file)) {
@@ -111,6 +112,58 @@ db_query <- function(query_fn, csv_fallback_fn) {
 # --- CEFR xəritəsi ---
 cefr_map <- c("1"="A1","2"="A1","3"="A2","4"="A2","5"="B1",
               "6"="B1","7"="B1","8"="B2","9"="B2","10"="C1","11"="C1")
+
+# --- Beynelxalq cerceveler (statik data - CSV/Binder ucun) ---
+BEYNELXALQ_DATA <- data.frame(
+  cerceve_adi = c(
+    rep("PISA", 3), rep("PIRLS", 4), rep("CEFR", 5), rep("Bloom", 6)
+  ),
+  kateqoriya = c(
+    "Melumat elde etme", "Interpretasiya", "Qiymetlendirme",
+    "Faktoloji anlama", "Netice cixarma", "Inteqrasiya", "Qiymetlendirme",
+    "A1", "A2", "B1", "B2", "C1",
+    "Xatirlama", "Anlama", "Tetbiq", "Analiz", "Qiymetlendirme", "Yaratma"
+  ),
+  alt_kateqoriya = c(
+    "Accessing and retrieving", "Integrating and interpreting", "Reflecting and evaluating",
+    "Aydin ifade olunmus melumat", "Birbasa netice", "Ideyalarin inteqrasiyasi", "Mezmun ve formanin qiymetlendirilmesi",
+    "1-2-ci sinif", "3-4-cu sinif", "5-7-ci sinif", "8-9-cu sinif", "10-11-ci sinif",
+    "Biliklerin xatirlanmasi", "Menanin anlasilmasi", "Bilik ve bacarqlarin tetbiqi",
+    "Hisselere ayirma", "Muhakime", "Yeni mezmun yaratma"
+  ),
+  sinif_min = c(
+    1,1,1, 1,1,1,1, 1,3,5,8,10, 1,1,1,5,7,9
+  ),
+  sinif_max = c(
+    11,11,11, 11,11,11,11, 2,4,7,9,11, 11,11,11,11,11,11
+  ),
+  stringsAsFactors = FALSE
+)
+
+OLKE_DATA <- data.frame(
+  olke = c(
+    rep("Finlandiya", 3), rep("Sinqapur", 3), rep("Estoniya", 3),
+    rep("Yaponiya", 3), rep("Kanada", 3), rep("Irlandiya", 3)
+  ),
+  mezmun_xetti = rep(c("Oxu", "Yazi", "Dinleme ve danisma"), 6),
+  standart_metni = c(
+    "Fenlerarasi oxu ve coxsayli metnler", "Media savadliligi ve reqemsal metn yaratma", "Sifahi uslub ve diskussiya",
+    "STELLAR proqrami - kommunikativ yanasma", "Kritik dusunce ve yaradici yazi", "Effektiv uslub ve prezentasiya",
+    "Reqemsal savadliliq ve onlayn menbeler", "Medeniyyetlerarasi kommunikasiya", "Muasir texnologiya ile dinleme",
+    "Derin oxu ve estetik duyum", "Yaradici ifade ve esse yazisi", "Sifahi eneneler ve poetik ifade",
+    "Diferensial oyrenme ve inkluziv yanasma", "Coxmedeniyyetli metnler ve tanqidi yazi", "Muxteli janrlarda dinleme",
+    "Ikidilli yanasma ve muqayiseli oxu", "Reqemsal metn yaratma ve blog", "Sifahi enene ve hekaye danisma"
+  ),
+  xususi_yanasma = c(
+    "Fenlerarasi oxu", "Media savadliligi", "Diskussiya",
+    "STELLAR", "Kritik dusunce", "Kommunikativ",
+    "Reqemsal savadliliq", "Medeniyyetlerarasi", "Texnoloji",
+    "Derin oxu", "Estetik duyum", "Sifahi enene",
+    "Diferensial", "Inkluziv", "Coxmedeniyyetli",
+    "Ikidilli", "Reqemsal", "Sifahi enene"
+  ),
+  stringsAsFactors = FALSE
+)
 
 # --- %||% operatoru ---
 `%||%` <- function(a, b) if (!is.null(a) && !is.na(a) && nchar(as.character(a)) > 0) a else b
@@ -687,7 +740,10 @@ server <- function(input, output, session) {
                       AND SPLIT_PART(sinif_araligi, '-', 2)::int
           ORDER BY cerceve_adi", sinif))
       },
-      function() data.frame()
+      function() {
+        bd <- BEYNELXALQ_DATA[BEYNELXALQ_DATA$sinif_min <= sinif & BEYNELXALQ_DATA$sinif_max >= sinif, ]
+        if (nrow(bd) > 0) bd[, c("cerceve_adi", "kateqoriya", "alt_kateqoriya")] else data.frame()
+      }
     )
     if (nrow(df) == 0) return(datatable(data.frame(Mesaj = "Melumat yoxdur")))
     datatable(df, options = list(pageLength = 15), rownames = FALSE,
@@ -701,7 +757,11 @@ server <- function(input, output, session) {
         if (input$olke_sec != "Hamisi") query <- paste0(query, sprintf(" WHERE olke = '%s'", input$olke_sec))
         dbGetQuery(con, query)
       },
-      function() data.frame()
+      function() {
+        od <- OLKE_DATA
+        if (input$olke_sec != "Hamisi") od <- od[od$olke == input$olke_sec, ]
+        od
+      }
     )
     if (nrow(df) == 0) return(datatable(data.frame(Mesaj = "Melumat yoxdur")))
     datatable(df, options = list(pageLength = 10), rownames = FALSE,
