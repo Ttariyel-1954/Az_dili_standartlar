@@ -52,12 +52,10 @@ DB_CONFIG <- list(
   password = Sys.getenv("DB_PASSWORD", "postgres")
 )
 
-# API KEY - birbaşa kodda (shinyapps.io və Binder üçün)
-CLAUDE_API_KEY <- "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"
-# .env və ya environment variable varsa, ondan istifadə et
-env_key <- Sys.getenv("ANTHROPIC_API_KEY", "")
-if (nchar(env_key) >= 10) CLAUDE_API_KEY <- env_key
-cat("   API KEY mövcuddur:", nchar(CLAUDE_API_KEY), "simvol\n")
+# API KEY - .env faylından və ya environment variable-dan oxunur
+CLAUDE_API_KEY <- Sys.getenv("ANTHROPIC_API_KEY", "")
+if (nchar(CLAUDE_API_KEY) < 10) CLAUDE_API_KEY <- ""
+cat("   API KEY:", if (nchar(CLAUDE_API_KEY) >= 10) paste0("mövcuddur (", nchar(CLAUDE_API_KEY), " simvol)") else "TAPILMADI", "\n")
 CLAUDE_MODEL <- Sys.getenv("DEFAULT_AI_MODEL", "claude-sonnet-4-20250514")
 CLAUDE_ENDPOINT <- "https://api.anthropic.com/v1/messages"
 
