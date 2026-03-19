@@ -4,5 +4,6 @@ install.packages(c(
   "DT",
   "httr",
   "jsonlite",
-  "plotly"
+  "plotly",
+  "writexl"
 ), repos = "https://cloud.r-project.org")
