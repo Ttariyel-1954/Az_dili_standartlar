@@ -11,6 +11,8 @@ library(DT)
 library(httr)
 library(jsonlite)
 library(plotly)
+library(officer)
+library(flextable)
 
 # --- .env faylından konfiqurasiya oxumaq ---
 env_file <- file.path(getwd(), ".env")
@@ -60,6 +62,37 @@ get_con <- function() {
             dbname = DB_CONFIG$dbname, host = DB_CONFIG$host,
             port = DB_CONFIG$port, user = DB_CONFIG$user,
             password = DB_CONFIG$password)
+}
+
+# --- Oxunaqlı kod formatı: 1-4.1.1 → Az_I_4.1.1 ---
+rum_reqem <- function(n) {
+  n <- as.integer(n)
+  vals <- c(1000,900,500,400,100,90,50,40,10,9,5,4,1)
+  syms <- c("M","CM","D","CD","C","XC","L","XL","X","IX","V","IV","I")
+  result <- ""
+  for (i in seq_along(vals)) {
+    while (n >= vals[i]) { result <- paste0(result, syms[i]); n <- n - vals[i] }
+  }
+  result
+}
+
+# alt_standart_kodu-nu oxunaqlı formata çevir: 1-4.1.1 → Az_I_4.1.1
+format_kod <- function(alt_kod) {
+  sapply(alt_kod, function(k) {
+    if (is.na(k) || nchar(k) == 0) return(k)
+    m <- regmatches(k, regexec("^([0-9]+)-(.+)$", k))[[1]]
+    if (length(m) == 3) {
+      paste0("Az_", rum_reqem(m[2]), "_", m[3])
+    } else k
+  }, USE.NAMES = FALSE)
+}
+
+# standart_kodu + sinif → oxunaqlı format: 4.1 → Az_I_4.1
+format_std_kod <- function(std_kod, sinif) {
+  mapply(function(k, s) {
+    if (is.na(k) || nchar(k) == 0) return(k)
+    paste0("Az_", rum_reqem(s), "_", k)
+  }, std_kod, sinif, USE.NAMES = FALSE)
 }
 
 # CSV-dən data oxuma funksiyaları
@@ -169,7 +202,6 @@ ui <- dashboardPage(
       menuItem("Statistika", tabName = "stats", icon = icon("chart-bar")),
       menuItem("Claude AI Təhlil", tabName = "ai_analysis", icon = icon("robot")),
       menuItem("Yekun Standartlar", tabName = "yekun", icon = icon("check-double")),
-      menuItem("Yeni Təkliflər", tabName = "yeni_teklifler_tab", icon = icon("lightbulb")),
       menuItem("HTML Export", tabName = "export", icon = icon("download"))
     ),
     hr(),
@@ -180,9 +212,9 @@ ui <- dashboardPage(
       selectInput("mezmun_sec", "📌 Məzmun xətti:",
                   choices = c("Hamısı" = "all", "Dinləmə", "Danışma", "Oxu", "Yazı", "Dil qaydaları"),
                   selected = "all"),
-      selectInput("deyisiklik_sec", "🔄 Dəyişiklik növü:",
-                  choices = c("Hamısı" = "all", "Mövcud" = "movcud", "Yenilənib" = "yenilenib",
-                              "Yeni" = "yeni", "Silinib" = "silinib"),
+      selectInput("deyisiklik_sec", "🔄 Status:",
+                  choices = c("Hamısı" = "all", "Dəyişməyib" = "deyismeyib", "Yenilənib" = "yenilenib",
+                              "Yeni yazılıb" = "yeni_yazilmis", "Silinib" = "silinib"),
                   selected = "all"),
       hr(),
       div(style = "text-align:center; color:#7f8c8d; font-size:12px;",
@@ -205,19 +237,31 @@ ui <- dashboardPage(
       .small-box { border-radius: 10px; }
       
       /* Cədvəl düzəlişləri */
-      .dataTables_wrapper { overflow-x: auto; }
-      table.dataTable { font-size: 14px; width: 100% !important; }
-      table.dataTable td { 
-        white-space: normal !important; 
+      .dataTables_wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table.dataTable { font-size: 20px; }
+      table.dataTable td {
+        white-space: normal !important;
         word-wrap: break-word;
-        max-width: 350px;
-        padding: 8px 10px !important;
+        overflow-wrap: break-word;
+        padding: 10px 12px !important;
         vertical-align: top;
+        line-height: 1.5em;
+        max-height: 4.5em;
+        overflow: hidden;
       }
-      table.dataTable th { 
-        white-space: nowrap; 
-        padding: 10px !important;
-        font-size: 13px;
+      table.dataTable td:hover {
+        max-height: none;
+        overflow: visible;
+      }
+      table.dataTable th {
+        white-space: nowrap;
+        padding: 12px !important;
+        font-size: 19px;
+        font-weight: 600;
+      }
+      .table-scroll-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
       
       /* Boş mesaj stili */
@@ -302,15 +346,15 @@ ui <- dashboardPage(
         border-left: 4px solid #FF9800;
         background: #FFFDE7;
       }
-      .cmp-card-right-movcud {
-        border-left: 4px solid #90CAF9;
+      .cmp-card-right-deyismeyib {
+        border-left: 4px solid #BDBDBD;
         background: #FAFAFA;
       }
       .cmp-card-right-yenilenib {
         border-left: 4px solid #4CAF50;
-        background: #F1F8E9;
+        background: #E8F5E9;
       }
-      .cmp-card-right-yeni {
+      .cmp-card-right-yeni_yazilmis {
         border-left: 4px solid #FF9800;
         background: #FFF3E0;
       }
@@ -343,9 +387,9 @@ ui <- dashboardPage(
         border-radius: 10px;
         margin-left: 5px;
       }
-      .cmp-badge-movcud { background: #E3F2FD; color: #1565C0; }
+      .cmp-badge-deyismeyib { background: #F5F5F5; color: #333; }
       .cmp-badge-yenilenib { background: #C8E6C9; color: #2E7D32; }
-      .cmp-badge-yeni { background: #FFE0B2; color: #E65100; }
+      .cmp-badge-yeni_yazilmis { background: #FFE0B2; color: #E65100; }
       .cmp-badge-silinib { background: #FFCDD2; color: #C62828; }
       
       /* ===== DİFF RENKLEME ===== */
@@ -432,11 +476,13 @@ ui <- dashboardPage(
       # ========== ANA SƏHİFƏ ==========
       tabItem(tabName = "home",
         fluidRow(
-          valueBoxOutput("vb_umumi", width = 3),
+          valueBoxOutput("vb_umumi", width = 2),
           valueBoxOutput("vb_movcud", width = 3),
           valueBoxOutput("vb_yenilenib", width = 3),
-          valueBoxOutput("vb_yeni", width = 3)
+          valueBoxOutput("vb_yeni", width = 2),
+          valueBoxOutput("vb_silinib", width = 2)
         ),
+
         fluidRow(
           box(title = "📊 Siniflər üzrə Standart Sayı", width = 8, 
               status = "primary", solidHeader = TRUE,
@@ -459,23 +505,30 @@ ui <- dashboardPage(
         )
       ),
       
-      # ========== STANDARTLAR ==========
+      # ========== STANDARTLAR (mövcud, dəyişilməmiş) ==========
       tabItem(tabName = "standards",
         fluidRow(
-          box(title = "📚 Standartlar", width = 12, status = "primary", solidHeader = TRUE,
-              div(style = "margin-bottom: 15px; display:flex; gap:8px; flex-wrap:wrap;",
-                actionButton("filter_all", "Hamısı", class = "btn btn-default",
-                             style = "font-size:14px; font-weight:600; border:2px solid #1976D2; color:#1976D2;"),
-                actionButton("filter_movcud", "Mövcud", class = "btn btn-default",
-                             style = "font-size:14px; font-weight:600; background:#E3F2FD; border:2px solid #90CAF9; color:#0D47A1;"),
-                actionButton("filter_yenilenib", "Yenilənib", class = "btn btn-default",
-                             style = "font-size:14px; font-weight:600; background:#E8F5E9; border:2px solid #4CAF50; color:#2E7D32;"),
-                actionButton("filter_yeni", "Yeni", class = "btn btn-default",
-                             style = "font-size:14px; font-weight:600; background:#FFF3E0; border:2px solid #FF9800; color:#E65100;"),
-                actionButton("filter_silinib", "Silinib", class = "btn btn-default",
-                             style = "font-size:14px; font-weight:600; background:#FFEBEE; border:2px solid #F44336; color:#C62828;")
-              ),
-              uiOutput("ui_standartlar"))
+          box(title = NULL, width = 12, background = "blue",
+              tags$h3(style="margin:0;color:white;", "Mövcud Standartlar (Orijinal)"),
+              tags$p(style="color:#e3f2fd;margin:5px 0 0 0;",
+                "Bu cədvəl orijinal, dəyişilməmiş standartları göstərir. Sinif seçərək standartları gözdən keçirin."))
+        ),
+        fluidRow(
+          column(4,
+            selectInput("std_sinif_sec", "Sinif seçin:",
+                        choices = setNames(1:11, paste0(1:11, "-ci sinif")),
+                        selected = 1, width = "100%")),
+          column(4,
+            selectInput("std_mezmun_sec", "Məzmun sahəsi:",
+                        choices = c("Hamısı" = "all", "Dinləmə və danışma", "Oxu", "Yazı", "Dil qaydaları"),
+                        selected = "all", width = "100%")),
+          column(4, style = "padding-top: 25px;",
+            tags$span(style="font-size:16px; font-weight:600; color:#1565C0;",
+              textOutput("std_count_info", inline = TRUE)))
+        ),
+        fluidRow(
+          box(title = NULL, width = 12, status = "primary", solidHeader = FALSE,
+              DTOutput("dt_standartlar_movcud"))
         )
       ),
       
@@ -485,16 +538,17 @@ ui <- dashboardPage(
           column(12,
             div(style="padding:10px 15px;background:#E3F2FD;border-radius:8px;margin-bottom:15px;",
               tags$span(style="font-weight:600;color:#0D47A1;", "Müqayisə: "),
-              tags$span(style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #ccc;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Dəyişməmiş  ",
-              tags$span(style="display:inline-block;width:18px;height:18px;background:#FFF8E1;border:1px solid #FF9800;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Yenilənib  ",
+              tags$span(style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #ccc;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Dəyişməyib  ",
+              tags$span(style="display:inline-block;width:18px;height:18px;background:#E8F5E9;border:1px solid #4CAF50;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Yenilənib  ",
               tags$span(style="display:inline-block;width:18px;height:18px;background:#FFEBEE;border:1px solid #F44336;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Silinib  ",
-              tags$span(style="display:inline-block;width:18px;height:18px;background:#E8F5E9;border:1px solid #4CAF50;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Yeni əlavə"
+              tags$span(style="display:inline-block;width:18px;height:18px;background:#FFF3E0;border:1px solid #FF9800;border-radius:3px;margin:0 4px;vertical-align:middle;"), " Yeni yazılıb"
             )
           )
         ),
         fluidRow(
           box(title = NULL, width = 12, solidHeader = FALSE,
-            uiOutput("ui_compare_table")
+            uiOutput("compare_info"),
+            DTOutput("dt_compare_table")
           )
         )
       ),
@@ -538,44 +592,30 @@ ui <- dashboardPage(
       
       # ========== AI TƏHLİL ==========
       tabItem(tabName = "ai_analysis",
-        # --- ADDIM 1: TƏHLİL ---
+        # --- TƏHLİL VƏ YAZ ---
         fluidRow(
-          box(title = "📋 Addım 1: Standartların Təhlili", width = 12, status = "primary", solidHeader = TRUE,
+          box(title = "🤖 Təhlil et və Yaz", width = 12, status = "primary", solidHeader = TRUE,
               tags$p(style="font-size:15px; color:#334155; margin-bottom:15px;",
                 "Seçilmiş sinifin mövcud standartları PISA, PIRLS, CEFR, Bloom və 6 ölkə standartları əsasında təhlil ediləcək.",
-                tags$br(), "Hər standarta status veriləcək: ✅ Qalsın, ✏️ Yenilənsin, ❌ Silinsin + Yeni standart təklifləri."),
-              actionButton("btn_step1", "🔍 Addım 1: Təhlil et", class = "btn-primary btn-lg",
-                           style = "font-size:16px; margin-bottom:15px;"),
+                tags$br(), "AI hər standartı təhlil edəcək, lazım olanları yenidən yazacaq və nəticəni birbaşa bazaya yazacaq."),
+              actionButton("btn_analyze_write", "🚀 Təhlil et və Yaz", class = "btn-primary btn-lg",
+                           style = "font-size:16px; margin-bottom:15px; font-weight:600;"),
               div(id = "ai_timer_panel"),
               uiOutput("ai_token_display"),
-              uiOutput("ai_result"))
+              uiOutput("ai_result"),
+              uiOutput("ai_write_status"))
         ),
-        # --- ADDIM 2: SEÇİM VƏ YENİLƏMƏ ---
+        # --- YENİ STANDART TƏKLİF ET ---
         fluidRow(
-          box(title = "✏️ Addım 2: Standartları Seçin və Yeniləyin", width = 12, status = "success", solidHeader = TRUE,
+          box(title = "💡 Yeni Standartlar Təklif Et", width = 12, status = "success", solidHeader = TRUE,
               tags$p(style="font-size:15px; color:#334155; margin-bottom:15px;",
-                "Hər standart üçün status seçin: Saxla, Yenilə, Sil. Sonra AI yalnız 'Yenilə' seçilmişləri yenidən yazacaq."),
-              div(style = "display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;",
-                actionButton("btn_step2_load", "📥 Standartları yüklə", class = "btn-info btn-lg",
-                             style = "font-size:15px;"),
-                actionButton("btn_step2_ai", "🤖 Seçilmişləri AI ilə yenilə", class = "btn-success btn-lg",
-                             style = "font-size:15px; font-weight:600;"),
-                actionButton("btn_step2_add_new", "➕ AI ilə yeni standart təklif et", class = "btn-warning btn-lg",
-                             style = "font-size:15px;")
-              ),
+                "AI boşluqları müəyyən edib yeni standartlar təklif edəcək. Yeni standartlar yekun_standartlar cədvəlinə 'yeni_yazilmis' statusu ilə əlavə olunacaq."),
+              actionButton("btn_new_standards", "💡 Yeni standartlar təklif et", class = "btn-success btn-lg",
+                           style = "font-size:16px; margin-bottom:15px; font-weight:600;"),
               div(id = "ai_timer_panel2"),
-              uiOutput("step2_status"),
-              DTOutput("dt_step2_review"))
-        ),
-        # --- ADDIM 3: YADDA SAXLA ---
-        fluidRow(
-          box(title = "💾 Addım 3: Bazaya Yaz", width = 12, status = "warning", solidHeader = TRUE,
-              tags$p(style="font-size:15px; color:#334155; margin-bottom:15px;",
-                "Yuxarıdakı cədvəli nəzərdən keçirdikdən sonra dəyişiklikləri bazaya yazın.",
-                tags$br(), "Yazdıqdan sonra 'Standartlar' tab-ında filtr düymələri ilə görə bilərsiniz."),
-              actionButton("btn_step3", "💾 Addım 3: Bazaya yaz", class = "btn-warning btn-lg",
-                           style = "font-size:16px; margin-bottom:15px;"),
-              uiOutput("step3_status"))
+              uiOutput("ai_new_token_display"),
+              uiOutput("ai_new_result"),
+              uiOutput("ai_new_write_status"))
         )
       ),
       
@@ -595,10 +635,10 @@ ui <- dashboardPage(
                         selected = 1, width = "100%")),
           column(3,
             selectInput("yekun_status_filter", "Status filtri:",
-                        choices = c("Hamısı" = "all", "Dəyişməmiş" = "movcud",
-                                    "Yenilənmiş" = "yenilenib",
-                                    "Yeni əlavə" = "yeni",
-                                    "Silinmiş" = "silinib"),
+                        choices = c("Hamısı" = "all", "Dəyişməyib" = "deyismeyib",
+                                    "Yenilənib" = "yenilenib",
+                                    "Yeni yazılıb" = "yeni_yazilmis",
+                                    "Silinib" = "silinib"),
                         selected = "all", width = "100%")),
           column(3, style = "padding-top:25px;",
             downloadButton("download_yekun_csv", "CSV ixrac", class = "btn-success",
@@ -606,9 +646,10 @@ ui <- dashboardPage(
             downloadButton("download_yekun_excel", "Excel ixrac", class = "btn-primary"))
         ),
         fluidRow(
-          valueBoxOutput("vb_yekun_umumi", width = 4),
+          valueBoxOutput("vb_yekun_umumi", width = 3),
           valueBoxOutput("vb_yekun_movcud", width = 3),
-          valueBoxOutput("vb_yekun_yenilenib", width = 3),
+          valueBoxOutput("vb_yekun_yenilenib", width = 2),
+          valueBoxOutput("vb_yekun_yeni", width = 2),
           valueBoxOutput("vb_yekun_silinib", width = 2)
         ),
         fluidRow(
@@ -662,9 +703,12 @@ ui <- dashboardPage(
           box(title = "📥 HTML Hesabat Yüklə", width = 6, status = "primary", solidHeader = TRUE,
               tags$p("Seçilmiş sinif üçün nəfis HTML hesabatı yükləyin:"),
               downloadButton("download_html", "⬇️ HTML Yüklə", class = "btn-primary btn-lg")),
-          box(title = "📊 CSV Yüklə", width = 6, status = "info", solidHeader = TRUE,
+          box(title = "📊 CSV Yüklə", width = 4, status = "info", solidHeader = TRUE,
               tags$p("Bütün standartları CSV formatında yükləyin:"),
-              downloadButton("download_csv", "⬇️ CSV Yüklə", class = "btn-info btn-lg"))
+              downloadButton("download_csv", "⬇️ CSV Yüklə", class = "btn-info btn-lg")),
+          box(title = "📝 Word Yüklə", width = 4, status = "success", solidHeader = TRUE,
+              tags$p("Yekun standartları nəfis Word formatında yükləyin (redaktə oluna bilər):"),
+              downloadButton("download_word", "⬇️ Word Yüklə", class = "btn-success btn-lg"))
         )
       )
     )
@@ -676,36 +720,8 @@ ui <- dashboardPage(
 # ============================================================
 server <- function(input, output, session) {
 
-  # --- Filtr düymələri ---
-  observeEvent(input$filter_all, { updateSelectInput(session, "deyisiklik_sec", selected = "all") })
-  observeEvent(input$filter_movcud, { updateSelectInput(session, "deyisiklik_sec", selected = "movcud") })
-  observeEvent(input$filter_yenilenib, { updateSelectInput(session, "deyisiklik_sec", selected = "yenilenib") })
-  observeEvent(input$filter_yeni, { updateSelectInput(session, "deyisiklik_sec", selected = "yeni") })
-  observeEvent(input$filter_silinib, { updateSelectInput(session, "deyisiklik_sec", selected = "silinib") })
-
   # --- Reaktiv məlumat (PostgreSQL + CSV fallback) ---
-  data_yenilenmi <- reactive({
-    if (USE_CSV) {
-      df <- csv_yenilenmi()
-      if (nrow(df) == 0) return(df)
-      df <- df[df$sinif == as.integer(input$sinif_sec), , drop=FALSE]
-      if (input$mezmun_sec != "all") df <- df[df$mezmun_xetti == input$mezmun_sec, , drop=FALSE]
-      if (input$deyisiklik_sec != "all") df <- df[df$deyisiklik_novu == input$deyisiklik_sec, , drop=FALSE]
-      df <- df[order(df$mezmun_xetti, df$standart_kodu), ]
-      return(df)
-    }
-    con <- get_con()
-    on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT * FROM yenilenmi_standartlar WHERE sinif = %s", input$sinif_sec)
-    if (input$mezmun_sec != "all") {
-      query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", input$mezmun_sec))
-    }
-    if (input$deyisiklik_sec != "all") {
-      query <- paste0(query, sprintf(" AND deyisiklik_novu = '%s'", input$deyisiklik_sec))
-    }
-    query <- paste0(query, " ORDER BY mezmun_xetti, standart_kodu")
-    dbGetQuery(con, query)
-  })
+  # Standartlar tab-ı indi movcud_standartlar-dan oxuyur (orijinal, dəyişilməmiş)
 
   data_movcud <- reactive({
     if (USE_CSV) {
@@ -716,36 +732,26 @@ server <- function(input, output, session) {
     }
     con <- get_con()
     on.exit(dbDisconnect(con))
-    query <- sprintf("SELECT * FROM movcud_standartlar WHERE sinif = %s ORDER BY mezmun_xetti, standart_kodu",
-                     input$sinif_sec)
+    query <- paste0("SELECT * FROM movcud_standartlar WHERE sinif = ", input$sinif_sec, " ORDER BY mezmun_xetti, standart_kodu")
     dbGetQuery(con, query)
   })
 
+  # Refresh trigger — AI yazandan sonra ana səhifəni yeniləmək üçün
+  stats_refresh <- reactiveVal(0)
+
   all_stats <- reactive({
+    stats_refresh()  # trigger-ə bağla
     if (USE_CSV) {
       df_m <- csv_movcud()
-      df_y <- csv_yenilenmi()
-      if (nrow(df_m) == 0) return(data.frame(sinif=integer(), umumi=integer(), movcud=integer(),
-                                              yenilenib=integer(), yeni=integer(), silinib=integer()))
+      if (nrow(df_m) == 0) return(data.frame(sinif=integer(), umumi=integer(), deyismeyib=integer(),
+                                              yenilenib=integer(), yeni_yazilmis=integer(), silinib=integer()))
       agg_m <- aggregate(id ~ sinif, data = df_m, FUN = length)
       names(agg_m) <- c("sinif", "movcud_say")
       df <- agg_m
       df$umumi <- df$movcud_say
-      df$movcud <- df$movcud_say
-      df$yenilenib <- 0L; df$yeni <- 0L; df$silinib <- 0L
-      if (nrow(df_y) > 0) {
-        for (s in unique(df_y$sinif)) {
-          idx <- which(df$sinif == s)
-          if (length(idx) > 0) {
-            sub <- df_y[df_y$sinif == s, , drop=FALSE]
-            df$yenilenib[idx] <- as.integer(sum(sub$deyisiklik_novu == "yenilenib", na.rm=TRUE))
-            df$yeni[idx] <- as.integer(sum(sub$deyisiklik_novu == "yeni", na.rm=TRUE))
-            df$silinib[idx] <- as.integer(sum(sub$deyisiklik_novu == "silinib", na.rm=TRUE))
-            df$umumi[idx] <- df$movcud_say[idx] + df$yeni[idx]
-          }
-        }
-      }
-      return(df[, c("sinif", "umumi", "movcud", "yenilenib", "yeni", "silinib")])
+      df$deyismeyib <- df$movcud_say
+      df$yenilenib <- 0L; df$yeni_yazilmis <- 0L; df$silinib <- 0L
+      return(df[, c("sinif", "umumi", "deyismeyib", "yenilenib", "yeni_yazilmis", "silinib")])
     }
 
     con <- get_con()
@@ -753,27 +759,27 @@ server <- function(input, output, session) {
 
     # Mövcud standartlar (əsas say)
     df_m <- dbGetQuery(con, "
-      SELECT sinif, COUNT(*) as movcud_say
+      SELECT sinif, COUNT(*)::integer as movcud_say
       FROM movcud_standartlar GROUP BY sinif ORDER BY sinif")
 
-    if (nrow(df_m) == 0) return(data.frame(sinif=integer(), umumi=integer(), movcud=integer(),
-                                            yenilenib=integer(), yeni=integer(), silinib=integer()))
+    if (nrow(df_m) == 0) return(data.frame(sinif=integer(), umumi=integer(), deyismeyib=integer(),
+                                            yenilenib=integer(), yeni_yazilmis=integer(), silinib=integer()))
 
     # Yekun standartlardan statistika al (əsas mənbə)
     df_yek <- dbGetQuery(con, "
       SELECT sinif,
-        COUNT(*) as umumi,
-        COUNT(*) FILTER (WHERE status = 'movcud') as movcud,
-        COUNT(*) FILTER (WHERE status = 'yenilenib') as yenilenib,
-        COUNT(*) FILTER (WHERE status = 'yeni') as yeni,
-        COUNT(*) FILTER (WHERE status = 'silinib') as silinib
+        COUNT(*)::integer as umumi,
+        (COUNT(*) FILTER (WHERE status = 'deyismeyib'))::integer as deyismeyib,
+        (COUNT(*) FILTER (WHERE status = 'yenilenib'))::integer as yenilenib,
+        (COUNT(*) FILTER (WHERE status = 'yeni_yazilmis'))::integer as yeni_yazilmis,
+        (COUNT(*) FILTER (WHERE status = 'silinib'))::integer as silinib
       FROM yekun_standartlar GROUP BY sinif ORDER BY sinif")
 
     df <- df_m
     df$umumi <- df$movcud_say
-    df$movcud <- df$movcud_say
+    df$deyismeyib <- df$movcud_say
     df$yenilenib <- 0L
-    df$yeni <- 0L
+    df$yeni_yazilmis <- 0L
     df$silinib <- 0L
 
     # Yekun varsa, həmin siniflərin dəyərlərini üstünə yaz
@@ -782,15 +788,15 @@ server <- function(input, output, session) {
         idx <- which(df$sinif == df_yek$sinif[i])
         if (length(idx) > 0) {
           df$umumi[idx] <- as.integer(df_yek$umumi[i])
-          df$movcud[idx] <- as.integer(df_yek$movcud[i])
+          df$deyismeyib[idx] <- as.integer(df_yek$deyismeyib[i])
           df$yenilenib[idx] <- as.integer(df_yek$yenilenib[i])
-          df$yeni[idx] <- as.integer(df_yek$yeni[i])
+          df$yeni_yazilmis[idx] <- as.integer(df_yek$yeni_yazilmis[i])
           df$silinib[idx] <- as.integer(df_yek$silinib[i])
         }
       }
     }
 
-    df[, c("sinif", "umumi", "movcud", "yenilenib", "yeni", "silinib")]
+    df[, c("sinif", "umumi", "deyismeyib", "yenilenib", "yeni_yazilmis", "silinib")]
   })
   
   # --- CEFR ---
@@ -798,38 +804,64 @@ server <- function(input, output, session) {
     cefr_map[input$sinif_sec]
   })
   
-  # --- VALUE BOXES ---
-  output$vb_umumi <- renderValueBox({
+  # --- VALUE BOXES (seçilmiş sinifə görə) ---
+  sinif_stats <- reactive({
     st <- all_stats()
-    val <- if (nrow(st) > 0) sum(st$umumi) else 0
-    valueBox(val, "Ümumi Standart", icon = icon("book"), color = "blue")
+    sinif <- as.integer(input$sinif_sec)
+    row <- st[st$sinif == sinif, , drop=FALSE]
+    if (nrow(row) == 0) return(list(umumi=0L, deyismeyib=0L, yenilenib=0L, yeni_yazilmis=0L, silinib=0L))
+    list(umumi = as.integer(row$umumi[1]),
+         deyismeyib = as.integer(row$deyismeyib[1]),
+         yenilenib = as.integer(row$yenilenib[1]),
+         yeni_yazilmis = as.integer(row$yeni_yazilmis[1]),
+         silinib = as.integer(row$silinib[1]))
+  })
+
+  output$vb_umumi <- renderValueBox({
+    s <- sinif_stats()
+    valueBox(s$umumi, paste0(input$sinif_sec, "-ci sinif: Ümumi"), icon = icon("book"), color = "blue")
   })
   output$vb_movcud <- renderValueBox({
-    st <- all_stats()
-    val <- if (nrow(st) > 0) sum(st$movcud) else 0
-    valueBox(val, "Mövcud", icon = icon("check"), color = "light-blue")
+    s <- sinif_stats()
+    valueBox(s$deyismeyib, "Dəyişməyib", icon = icon("check"), color = "light-blue")
   })
   output$vb_yenilenib <- renderValueBox({
-    st <- all_stats()
-    val <- if (nrow(st) > 0) as.integer(sum(st$yenilenib)) else 0L
-    valueBox(val, "Yenilənib", icon = icon("edit"), color = "green")
+    s <- sinif_stats()
+    valueBox(s$yenilenib, "Yenilənib", icon = icon("edit"), color = "green")
   })
   output$vb_yeni <- renderValueBox({
-    st <- all_stats()
-    val <- if (nrow(st) > 0) as.integer(sum(st$yeni)) else 0L
-    valueBox(val, "Yeni Əlavə", icon = icon("plus"), color = "orange")
+    s <- sinif_stats()
+    valueBox(s$yeni_yazilmis, "Yeni yazılıb", icon = icon("plus"), color = "orange")
+  })
+  output$vb_silinib <- renderValueBox({
+    s <- sinif_stats()
+    valueBox(s$silinib, "Silinib", icon = icon("trash"), color = "red")
   })
   
-  # --- QRAFİKLƏR ---
+  # --- QRAFİKLƏR (yekun cədvəldən) ---
   output$chart_sinifler <- renderPlotly({
-    st <- all_stats()
+    stats_refresh()
+    # Birbaşa yekun_standartlar-dan oxu
+    st <- tryCatch({
+      con <- get_con(); on.exit(dbDisconnect(con))
+      dbGetQuery(con, "
+        SELECT sinif,
+          (COUNT(*))::integer as umumi,
+          (COUNT(*) FILTER (WHERE status = 'deyismeyib'))::integer as deyismeyib,
+          (COUNT(*) FILTER (WHERE status = 'yenilenib'))::integer as yenilenib,
+          (COUNT(*) FILTER (WHERE status = 'yeni_yazilmis'))::integer as yeni_yazilmis,
+          (COUNT(*) FILTER (WHERE status = 'silinib'))::integer as silinib
+        FROM yekun_standartlar GROUP BY sinif ORDER BY sinif")
+    }, error = function(e) data.frame())
+
     if (nrow(st) == 0) return(plotly_empty(type = "bar"))
-    
+
     plot_ly(st, x = ~paste0(sinif, "-ci sinif"), type = "bar") %>%
-      add_bars(y = ~movcud, name = "Mövcud", marker = list(color = "#90CAF9")) %>%
+      add_bars(y = ~deyismeyib, name = "Dəyişməyib", marker = list(color = "#90CAF9")) %>%
       add_bars(y = ~yenilenib, name = "Yenilənib", marker = list(color = "#4CAF50")) %>%
-      add_bars(y = ~yeni, name = "Yeni", marker = list(color = "#FF9800")) %>%
-      layout(barmode = "stack", 
+      add_bars(y = ~yeni_yazilmis, name = "Yeni yazılıb", marker = list(color = "#FF9800")) %>%
+      add_bars(y = ~silinib, name = "Silinib", marker = list(color = "#F44336")) %>%
+      layout(barmode = "stack",
              xaxis = list(title = ""), yaxis = list(title = "Standart sayı"),
              legend = list(orientation = "h", y = -0.15),
              font = list(family = "Noto Sans"))
@@ -837,6 +869,7 @@ server <- function(input, output, session) {
   
   # --- Statistika üçün yekun datası (bütün siniflər) ---
   data_yekun_all <- reactive({
+    stats_refresh()  # AI yazdıqdan sonra yenilənsin
     tryCatch({
       if (USE_CSV) {
         f <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
@@ -844,7 +877,7 @@ server <- function(input, output, session) {
         read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
       } else {
         con <- get_con(); on.exit(dbDisconnect(con))
-        dbGetQuery(con, "SELECT * FROM yekun_standartlar ORDER BY sinif, mezmun_xetti, standart_kodu")
+        dbGetQuery(con, "SELECT * FROM yekun_standartlar ORDER BY sinif, mezmun_sahesi, kod")
       }
     }, error = function(e) data.frame())
   })
@@ -853,10 +886,10 @@ server <- function(input, output, session) {
     df <- data_yekun_all()
     if (nrow(df) == 0 || !"status" %in% names(df)) return(plotly_empty(type = "bar"))
 
-    status_labels <- c("movcud" = "Dəyişməmiş", "yenilenib" = "Yenilənmiş", "yeni" = "Yeni əlavə", "silinib" = "Silinmiş")
+    status_labels <- c("deyismeyib" = "Dəyişməyib", "yenilenib" = "Yenilənib", "yeni_yazilmis" = "Yeni yazılıb", "silinib" = "Silinib")
     counts <- table(df$status)
     labels <- sapply(names(counts), function(s) if (s %in% names(status_labels)) status_labels[s] else s)
-    colors <- c("movcud" = "#90CAF9", "yenilenib" = "#4CAF50", "yeni" = "#FF9800", "silinib" = "#F44336")
+    colors <- c("deyismeyib" = "#90CAF9", "yenilenib" = "#4CAF50", "yeni_yazilmis" = "#FF9800", "silinib" = "#F44336")
 
     plot_ly(labels = labels, values = as.numeric(counts), type = "pie",
             marker = list(colors = colors[names(counts)]),
@@ -866,10 +899,23 @@ server <- function(input, output, session) {
 
   output$chart_mezmun <- renderPlotly({
     df <- data_yekun_all()
+    # Yekun boşdursa, mövcud standartlardan göstər
+    if (nrow(df) == 0) {
+      df <- tryCatch({
+        con <- get_con()
+        res <- dbGetQuery(con, "SELECT mezmun_xetti FROM movcud_standartlar")
+        dbDisconnect(con)
+        res
+      }, error = function(e) data.frame())
+    }
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
 
-    counts <- as.data.frame(table(df$mezmun_xetti))
-    plot_ly(counts, x = ~Var1, y = ~Freq, type = "bar",
+    mezmun_col <- if ("mezmun_sahesi" %in% names(df)) df$mezmun_sahesi else if ("mezmun_xetti" %in% names(df)) df$mezmun_xetti else rep("", nrow(df))
+    mezmun_col <- mezmun_col[!is.na(mezmun_col) & nchar(mezmun_col) > 0]
+    if (length(mezmun_col) == 0) return(plotly_empty(type = "bar"))
+    counts <- as.data.frame(table(mezmun_col), stringsAsFactors = FALSE)
+    names(counts) <- c("mezmun", "say")
+    plot_ly(counts, x = ~mezmun, y = ~say, type = "bar",
             marker = list(color = "#1976D2")) %>%
       layout(xaxis = list(title = ""), yaxis = list(title = "Say"),
              font = list(family = "Noto Sans"))
@@ -877,12 +923,15 @@ server <- function(input, output, session) {
 
   output$chart_bloom <- renderPlotly({
     df <- data_yekun_all()
-    if (nrow(df) == 0 || !"bloom_seviyyesi" %in% names(df)) return(plotly_empty(type = "bar"))
-    df <- df[!is.na(df$bloom_seviyyesi) & nchar(df$bloom_seviyyesi) > 0, ]
+    bloom_col_name <- if ("bloom_taksonomiyasi" %in% names(df)) "bloom_taksonomiyasi" else if ("bloom_seviyyesi" %in% names(df)) "bloom_seviyyesi" else NULL
+    if (nrow(df) == 0 || is.null(bloom_col_name)) return(plotly_empty(type = "bar"))
+    bloom_vals <- df[[bloom_col_name]]
+    df <- df[!is.na(bloom_vals) & nchar(bloom_vals) > 0, ]
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
+    bloom_vals <- df[[bloom_col_name]]
 
     bloom_order <- c("Xatırlama", "Anlama", "Tətbiq", "Analiz", "Qiymətləndirmə", "Yaratma")
-    counts <- as.data.frame(table(factor(df$bloom_seviyyesi, levels = bloom_order)))
+    counts <- as.data.frame(table(factor(bloom_vals, levels = bloom_order)))
 
     bloom_colors <- c("#E3F2FD", "#BBDEFB", "#90CAF9", "#42A5F5", "#1976D2", "#0D47A1")
     plot_ly(counts, x = ~Var1, y = ~Freq, type = "bar",
@@ -893,11 +942,13 @@ server <- function(input, output, session) {
 
   output$chart_cefr <- renderPlotly({
     df <- data_yekun_all()
-    if (nrow(df) == 0 || !"cefr_seviyyesi" %in% names(df)) return(plotly_empty(type = "bar"))
-    df <- df[!is.na(df$cefr_seviyyesi) & df$cefr_seviyyesi != "", ]
+    # CEFR sütunu artıq yekun_standartlar-da yoxdur, sinif-dən hesablanır
+    if (nrow(df) == 0 || !"sinif" %in% names(df)) return(plotly_empty(type = "bar"))
+    df$cefr_hesab <- cefr_map[as.character(df$sinif)]
+    df <- df[!is.na(df$cefr_hesab) & df$cefr_hesab != "", ]
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
 
-    counts <- as.data.frame(table(df$cefr_seviyyesi), stringsAsFactors = FALSE)
+    counts <- as.data.frame(table(df$cefr_hesab), stringsAsFactors = FALSE)
     names(counts) <- c("cefr_seviyyesi", "say")
 
     plot_ly(counts, x = ~cefr_seviyyesi, y = ~say, type = "bar",
@@ -908,11 +959,14 @@ server <- function(input, output, session) {
 
   output$chart_bloom_all <- renderPlotly({
     df <- data_yekun_all()
-    if (nrow(df) == 0 || !"bloom_seviyyesi" %in% names(df)) return(plotly_empty(type = "bar"))
-    df <- df[!is.na(df$bloom_seviyyesi) & df$bloom_seviyyesi != "", ]
+    bloom_col_name <- if ("bloom_taksonomiyasi" %in% names(df)) "bloom_taksonomiyasi" else if ("bloom_seviyyesi" %in% names(df)) "bloom_seviyyesi" else NULL
+    if (nrow(df) == 0 || is.null(bloom_col_name)) return(plotly_empty(type = "bar"))
+    bloom_vals <- df[[bloom_col_name]]
+    df <- df[!is.na(bloom_vals) & bloom_vals != "", ]
     if (nrow(df) == 0) return(plotly_empty(type = "bar"))
+    bloom_vals <- df[[bloom_col_name]]
 
-    counts <- as.data.frame(table(df$bloom_seviyyesi), stringsAsFactors = FALSE)
+    counts <- as.data.frame(table(bloom_vals), stringsAsFactors = FALSE)
     names(counts) <- c("bloom_seviyyesi", "say")
 
     plot_ly(counts, labels = ~bloom_seviyyesi, values = ~say, type = "pie",
@@ -921,78 +975,61 @@ server <- function(input, output, session) {
   })
   
   # --- CƏDVƏLLƏR ---
-  
-  # Standartlar pəncərəsi — şərti göstərmə
-  output$ui_standartlar <- renderUI({
-    df <- data_yenilenmi()
-    if (nrow(df) == 0) {
-      # "Hamisi" ve ya "Movcud" secilibse - movcud standartlari goster
-      if (input$deyisiklik_sec %in% c("all", "movcud")) {
-        return(DTOutput("dt_standartlar_movcud"))
+
+  # Standartlar tab — mövcud standartlar (orijinal, dəyişilməmiş)
+  # Standartlar tabı üçün data
+  data_std_movcud <- reactive({
+    sinif <- as.integer(input$std_sinif_sec)
+    tryCatch({
+      con <- get_con(); on.exit(dbDisconnect(con))
+      query <- sprintf("SELECT kod, mezmun_xetti, standart_metni, alt_standart_metni FROM movcud_standartlar WHERE sinif = %d", sinif)
+      if (!is.null(input$std_mezmun_sec) && input$std_mezmun_sec != "all") {
+        query <- paste0(query, " AND mezmun_xetti = '", input$std_mezmun_sec, "'")
       }
-      filtr_adi <- switch(input$deyisiklik_sec,
-        "yenilenib" = "yenilənmiş", "yeni" = "yeni", "silinib" = "silinmiş", "")
-      return(div(class = "bos-mesaj",
-        div(class = "icon", "📭"),
-        tags$p(sprintf("%s standart yoxdur. Əvvəlcə 'Claude AI Təhlil' bölməsindən təhlil aparın.", filtr_adi))
-      ))
-    }
-    DTOutput("dt_standartlar")
+      query <- paste0(query, " ORDER BY kod")
+      dbGetQuery(con, query)
+    }, error = function(e) data.frame())
+  })
+
+  output$std_count_info <- renderText({
+    df <- data_std_movcud()
+    paste0("Cəmi: ", nrow(df), " standart")
   })
 
   output$dt_standartlar_movcud <- renderDT({
-    df <- data_movcud()
-    if (nrow(df) == 0) return(NULL)
-    show_cols <- intersect(c("standart_kodu", "standart_metni", "alt_standart_metni",
-                              "mezmun_xetti", "bloom_seviyyesi"), names(df))
-    df_show <- df[, show_cols, drop = FALSE]
-    nice_names <- c("standart_kodu"="Kod", "standart_metni"="Standart",
-                    "alt_standart_metni"="Alt standart", "mezmun_xetti"="Məzmun xətti",
-                    "bloom_seviyyesi"="Bloom")
-    names(df_show) <- nice_names[show_cols]
-    datatable(df_show,
-              options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE),
-              rownames = FALSE)
-  })
-  
-  output$dt_standartlar <- renderDT({
-    df <- data_yenilenmi()
-    req(nrow(df) > 0)
+    df <- data_std_movcud()
+    if (nrow(df) == 0) {
+      return(datatable(data.frame(Mesaj = "Bu sinif üçün standart tapılmadı."),
+                       rownames = FALSE, options = list(dom = 't')))
+    }
 
-    show_cols <- c("standart_kodu", "standart_metni", "alt_standart_metni",
-                   "mezmun_xetti", "deyisiklik_novu", "bloom_seviyyesi", "cefr_seviyyesi",
-                   "esaslandirma")
-    show_cols <- intersect(show_cols, names(df))
+    standart_text <- ifelse(!is.na(df$alt_standart_metni) & nchar(df$alt_standart_metni) > 0,
+                            df$alt_standart_metni, df$standart_metni)
 
-    df_show <- df[, show_cols, drop=FALSE]
-    names(df_show) <- c("Kod", "Standart", "Alt standart", "Məzmun xətti",
-                         "Dəyişiklik", "Bloom", "CEFR", "Əsaslandırma")[seq_along(show_cols)]
+    df_show <- data.frame(
+      `Kod` = df$kod,
+      `Məzmun sahəsi` = df$mezmun_xetti,
+      `Standart` = standart_text,
+      check.names = FALSE, stringsAsFactors = FALSE
+    )
+    df_show[is.na(df_show)] <- ""
 
     datatable(df_show,
-              options = list(
-                pageLength = 20,
-                scrollX = TRUE,
-                autoWidth = FALSE,
+              options = list(pageLength = 50, scrollX = TRUE, autoWidth = FALSE,
+                dom = 'lfrtip',
                 columnDefs = list(
-                  list(width = '60px', targets = 0),
-                  list(width = '250px', targets = 1),
-                  list(width = '200px', targets = 2),
-                  list(width = '90px', targets = 3),
-                  list(width = '80px', targets = 4),
-                  list(width = '80px', targets = 5),
-                  list(width = '50px', targets = 6),
-                  list(width = '200px', targets = 7)
-                )
-              ),
+                  list(width = '140px', targets = 0),
+                  list(width = '160px', targets = 1),
+                  list(width = '600px', targets = 2)
+                )),
               rownames = FALSE) %>%
-      formatStyle("Dəyişiklik",
-                  backgroundColor = styleEqual(
-                    c("movcud", "yenilenib", "yeni", "silinib"),
-                    c("#E3F2FD", "#E8F5E9", "#FFF3E0", "#FFEBEE")))
+      formatStyle('Kod', fontWeight = 'bold', color = '#1565C0') %>%
+      formatStyle('Məzmun sahəsi', fontWeight = '500', color = '#37474F')
   })
   
   # --- Müqayisə üçün yekun datası ---
   data_compare <- reactive({
+    stats_refresh()  # AI yazdıqdan sonra yenilənsin
     sinif <- as.integer(input$sinif_sec)
     tryCatch({
       if (USE_CSV) {
@@ -1005,8 +1042,8 @@ server <- function(input, output, session) {
         con <- get_con(); on.exit(dbDisconnect(con))
         dbGetQuery(con, sprintf(
           "SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY
-           CASE status WHEN 'movcud' THEN 1 WHEN 'yenilenib' THEN 1 WHEN 'silinib' THEN 1 WHEN 'yeni' THEN 2 ELSE 3 END,
-           mezmun_xetti, standart_kodu", sinif))
+           CASE status WHEN 'deyismeyib' THEN 1 WHEN 'yenilenib' THEN 1 WHEN 'silinib' THEN 1 WHEN 'yeni_yazilmis' THEN 2 ELSE 3 END,
+           mezmun_sahesi, kod", sinif))
       }
     }, error = function(e) data.frame())
   })
@@ -1028,92 +1065,82 @@ server <- function(input, output, session) {
     paste(result, collapse = " ")
   }
 
-  # Müqayisə — tək panel, hər standart bir sətir: sol köhnə, sağ yeni
-  output$ui_compare_table <- renderUI({
+  # Müqayisə — info mesajı
+  output$compare_info <- renderUI({
     df <- data_compare()
+    if (nrow(df) == 0) return(tags$div(style="padding:40px;text-align:center;color:#9E9E9E;font-size:18px;",
+      "Bu sinif üçün yekun standart yoxdur. Əvvəlcə AI Təhlil bölməsindən təhlili tamamlayın."))
+    n_changed <- sum(df$status != "deyismeyib", na.rm=TRUE)
+    tags$div(style="margin-bottom:10px;color:#546E7A;font-size:15px;",
+      sprintf("Cəmi: %d standart — Dəyişməyib: %d, Yenilənib: %d, Yeni yazılıb: %d, Silinib: %d",
+              nrow(df),
+              sum(df$status == "deyismeyib", na.rm=TRUE),
+              sum(df$status == "yenilenib", na.rm=TRUE),
+              sum(df$status == "yeni_yazilmis", na.rm=TRUE),
+              sum(df$status == "silinib", na.rm=TRUE)),
+      if (n_changed > 0) tags$span(style="color:#1B5E20;font-weight:600;margin-left:15px;",
+        sprintf("(%d dəyişiklik göstərilir)", n_changed)))
+  })
+
+  # Müqayisə — DT cədvəl, bütün sətir statusa görə rənglənir
+  output$dt_compare_table <- renderDT({
+    df <- data_compare()
+    req(nrow(df) > 0)
+
+    # Yalnız dəyişiklik olan standartları göstər (deyismeyib olanları gizlət)
+    df <- df[df$status != "deyismeyib", , drop=FALSE]
     if (nrow(df) == 0) {
-      return(tags$div(style="padding:40px;text-align:center;color:#9E9E9E;font-size:18px;",
-        "Bu sinif üçün yekun standart yoxdur. Əvvəlcə AI Təhlil bölməsindən 3 addımı tamamlayın."))
+      return(datatable(data.frame(Mesaj = "Bu sinif üçün hələ dəyişiklik edilməyib. Əvvəlcə 'Claude AI Təhlil' bölməsindən təhlili tamamlayın."),
+                       rownames = FALSE, options = list(dom = 't')))
     }
 
-    cards <- lapply(1:nrow(df), function(i) {
-      row <- df[i, ]
-      kod <- if (!is.na(row$standart_kodu)) row$standart_kodu else ""
-      alt_kod <- if (!is.na(row$alt_standart_kodu)) row$alt_standart_kodu else ""
-      mez <- if (!is.na(row$mezmun_xetti)) row$mezmun_xetti else ""
-      st <- if ("status" %in% names(row) && !is.na(row$status)) row$status else "movcud"
-
-      kohne_metn <- if ("standart_metni" %in% names(row) && !is.na(row$standart_metni)) row$standart_metni else ""
-      kohne_alt <- if ("alt_standart_metni" %in% names(row) && !is.na(row$alt_standart_metni)) row$alt_standart_metni else ""
-      yeni_metn <- if ("yeni_standart_metni" %in% names(row) && !is.na(row$yeni_standart_metni)) row$yeni_standart_metni else ""
-      yeni_alt <- if ("yeni_alt_standart_metni" %in% names(row) && !is.na(row$yeni_alt_standart_metni)) row$yeni_alt_standart_metni else ""
-
-      # Status badge
-      badge <- switch(st,
-        "movcud" = '<span style="background:#90CAF9;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Dəyişməmiş</span>',
-        "yenilenib" = '<span style="background:#4CAF50;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Yenilənib</span>',
-        "silinib" = '<span style="background:#F44336;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Silinib</span>',
-        "yeni" = '<span style="background:#FF9800;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">Yeni əlavə</span>',
-        "")
-
-      # Fon rəngi
-      bg <- switch(st, "movcud"="#FFFFFF", "yenilenib"="#FFF8E1", "silinib"="#FFEBEE", "yeni"="#E8F5E9", "#FFFFFF")
-      border_color <- switch(st, "movcud"="#E0E0E0", "yenilenib"="#FF9800", "silinib"="#F44336", "yeni"="#4CAF50", "#E0E0E0")
-
-      if (st == "movcud") {
-        # Dəyişməmiş — kompakt, bir sətir
-        tags$div(style=sprintf("display:flex;align-items:flex-start;padding:8px 12px;border-bottom:1px solid #EEEEEE;background:%s;", bg),
-          tags$div(style="width:70px;flex-shrink:0;font-weight:600;color:#1976D2;font-size:13px;padding-top:2px;", alt_kod),
-          tags$div(style="width:90px;flex-shrink:0;", tags$span(style="background:#E3F2FD;color:#1565C0;padding:2px 6px;border-radius:4px;font-size:11px;", mez)),
-          tags$div(style="flex:1;color:#757575;font-size:13px;", kohne_alt),
-          tags$div(style="width:90px;flex-shrink:0;text-align:right;", HTML(badge))
-        )
-      } else if (st == "yenilenib") {
-        # Yenilənib — köhnə və yeni yan-yana
-        yeni_alt_html <- yeni_alt
-        if (nchar(kohne_alt) > 0 && nchar(yeni_alt) > 0 && kohne_alt != yeni_alt) {
-          yeni_alt_html <- highlight_diff(kohne_alt, yeni_alt)
-        }
-        tags$div(style=sprintf("padding:10px 12px;border:2px solid %s;border-radius:8px;margin:6px 0;background:%s;", border_color, bg),
-          tags$div(style="display:flex;align-items:center;margin-bottom:8px;",
-            tags$span(style="font-weight:700;color:#1976D2;margin-right:10px;", alt_kod),
-            tags$span(style="background:#E3F2FD;color:#1565C0;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:10px;", mez),
-            HTML(badge)
-          ),
-          tags$div(style="display:flex;gap:16px;",
-            tags$div(style="flex:1;padding:8px 12px;background:#FFF;border-radius:6px;border:1px solid #E0E0E0;",
-              tags$div(style="font-size:11px;color:#E65100;font-weight:600;margin-bottom:4px;", "KÖHNƏ:"),
-              tags$p(style="margin:0;color:#616161;font-size:13px;", kohne_alt)
-            ),
-            tags$div(style="flex:0 0 24px;display:flex;align-items:center;justify-content:center;color:#4CAF50;font-size:20px;font-weight:bold;", HTML("&rarr;")),
-            tags$div(style="flex:1;padding:8px 12px;background:#E8F5E9;border-radius:6px;border:1px solid #A5D6A7;",
-              tags$div(style="font-size:11px;color:#2E7D32;font-weight:600;margin-bottom:4px;", "YENİ:"),
-              tags$p(style="margin:0;font-size:13px;", HTML(yeni_alt_html))
-            )
-          )
-        )
-      } else if (st == "silinib") {
-        tags$div(style=sprintf("padding:10px 12px;border:2px solid %s;border-radius:8px;margin:6px 0;background:%s;", border_color, bg),
-          tags$div(style="display:flex;align-items:center;",
-            tags$span(style="font-weight:700;color:#1976D2;margin-right:10px;", alt_kod),
-            tags$span(style="background:#FFCDD2;color:#C62828;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:10px;", mez),
-            HTML(badge)
-          ),
-          tags$p(style="margin:6px 0 0 0;color:#C62828;text-decoration:line-through;font-size:13px;", kohne_alt)
-        )
-      } else if (st == "yeni") {
-        tags$div(style=sprintf("padding:10px 12px;border:2px solid %s;border-radius:8px;margin:6px 0;background:%s;", border_color, bg),
-          tags$div(style="display:flex;align-items:center;margin-bottom:4px;",
-            tags$span(style="font-weight:700;color:#1976D2;margin-right:10px;", alt_kod),
-            tags$span(style="background:#C8E6C9;color:#2E7D32;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:10px;", mez),
-            HTML(badge)
-          ),
-          tags$p(style="margin:0;color:#2E7D32;font-weight:600;font-size:13px;", yeni_metn),
-          if (nchar(yeni_alt) > 0) tags$p(style="margin:4px 0 0 10px;font-size:13px;color:#388E3C;", tags$em(yeni_alt))
-        )
-      }
+    status_adi_map <- c("yenilenib" = "Yenilənib", "silinib" = "Silinib", "yeni_yazilmis" = "Yeni yazılıb")
+    df$status_adi <- sapply(df$status, function(s) {
+      if (s %in% names(status_adi_map)) status_adi_map[s] else s
     })
-    do.call(tagList, cards)
+
+    kohne_col <- if ("kohne_standart_metni" %in% names(df)) df$kohne_standart_metni else rep("", nrow(df))
+    kohne_col[is.na(kohne_col) | kohne_col == "NA"] <- ""
+    idx_yeni <- df$status == "yeni_yazilmis"
+    kohne_col[idx_yeni] <- ""
+
+    kod_col <- if ("kod" %in% names(df)) df$kod else ""
+    mezmun_col <- if ("mezmun_sahesi" %in% names(df)) df$mezmun_sahesi else if ("mezmun_xetti" %in% names(df)) df$mezmun_xetti else ""
+    xarakt_col <- if ("xarakteristika" %in% names(df)) df$xarakteristika else rep("", nrow(df))
+    xarakt_col[is.na(xarakt_col)] <- ""
+
+    df_show <- data.frame(
+      `Kod` = kod_col,
+      `Status` = df$status_adi,
+      `Məzmun sahəsi` = mezmun_col,
+      `Köhnə standart` = kohne_col,
+      `Yeni standart` = df$standart_metni,
+      `Xarakteristika` = xarakt_col,
+      check.names = FALSE, stringsAsFactors = FALSE
+    )
+    df_show[is.na(df_show)] <- ""
+
+    datatable(df_show,
+              options = list(pageLength = 50, scrollX = TRUE, autoWidth = FALSE,
+                scrollXInner = '1500px',
+                columnDefs = list(
+                  list(width = '130px', targets = 0),
+                  list(width = '110px', targets = 1),
+                  list(width = '140px', targets = 2),
+                  list(width = '350px', targets = 3),
+                  list(width = '350px', targets = 4),
+                  list(width = '300px', targets = 5)
+                )),
+              rownames = FALSE) %>%
+      formatStyle("Status", target = "row",
+                  backgroundColor = styleEqual(
+                    c("Yenilənib", "Silinib", "Yeni yazılıb"),
+                    c("#E8F5E9", "#FFEBEE", "#FFF3E0")),
+                  color = styleEqual(
+                    c("Yenilənib", "Silinib", "Yeni yazılıb"),
+                    c("#1B5E20", "#B71C1C", "#E65100"))) %>%
+      formatStyle("Status", fontWeight = "bold") %>%
+      formatStyle("Köhnə standart", color = "#757575", fontStyle = "italic")
   })
   
   output$dt_beynelxalq <- renderDT({
@@ -1163,12 +1190,13 @@ server <- function(input, output, session) {
   })
   
   # ============================================================
-  # ADDIM 1: TƏHLİL — JSON ilə hər standarta status ver + yeni təkliflər
+  # TƏHLİL ET VƏ YAZ — Bir addımda təhlil, yenidənyazma və bazaya yazma
   # ============================================================
-  observeEvent(input$btn_step1, {
+  observeEvent(input$btn_analyze_write, {
     sinif <- input$sinif_sec
     mezmun <- input$mezmun_sec
 
+    # ===== Mövcud standartları bazadan oxu =====
     if (USE_CSV) {
       df <- csv_movcud()
       if (nrow(df) > 0) {
@@ -1193,20 +1221,21 @@ server <- function(input, output, session) {
     mezmun_label <- if (mezmun == "all") "bütün məzmun xətləri" else mezmun
     cefr_sev <- cefr_map[as.character(sinif)]
     std_cols <- intersect(c("standart_kodu","standart_metni","alt_standart_kodu","alt_standart_metni",
-                            "mezmun_xetti","bloom_seviyyesi"), names(df))
+                            "mezmun_xetti","bloom_seviyyesi","kod"), names(df))
 
     session$sendCustomMessage("ai_timer_start", list(
       target = "ai_timer_panel",
-      status = "Addım 1: Claude AI təhlil edir...",
+      status = "Claude AI təhlil edir və yazır...",
       info1 = paste0(sinif, "-ci sinif"),
       info2 = paste0(nrow(df), " standart (", mezmun_label, ")")
     ))
-    output$ai_token_display <- renderUI(tags$div(class = "token-display token-waiting", "⏳ Addım 1 icra olunur..."))
+    output$ai_token_display <- renderUI(tags$div(class = "token-display token-waiting", "⏳ Təhlil və yazma icra olunur..."))
     output$ai_result <- renderUI(NULL)
+    output$ai_write_status <- renderUI(NULL)
 
     std_json <- toJSON(df[, std_cols, drop=FALSE], pretty = TRUE, auto_unbox = TRUE)
     prompt <- paste0(
-'Sən Azərbaycan dili kurikulumu üzrə beynəlxalq ekspertisən. Sənin vəzifən ', sinif, '-ci sinif, "', mezmun_label, '" üçün mövcud standartları dərindən təhlil etmək və BOŞLUQLARI müəyyən edib yeni standartlar təklif etməkdir.
+'Sən Azərbaycan dili kurikulumu üzrə beynəlxalq ekspertisən. Sənin vəzifən ', sinif, '-ci sinif, "', mezmun_label, '" üçün mövcud standartları dərindən təhlil etmək, lazım olanları yenidən yazmaq və nəticəni JSON formatında qaytarmaqdır.
 
 Bu sinif üçün CEFR səviyyəsi: ', cefr_sev, '
 
@@ -1280,116 +1309,67 @@ TƏHLİL METODOLOGİYASI (hər standart üçün tətbiq et):
    - Özünüidarəetmə və metakognitiv strategiyalar
    → Bu sahələrdən hansıları mövcud standartlarda ƏKSİKDİR?
 
-═══════════════════════════════════════════
-YENİ STANDART TƏKLİFLƏRİ — MÜTLƏQDİR!
-═══════════════════════════════════════════
-Yuxarıdakı təhlilin nəticəsində müəyyən etdiyin BOŞLUQLARA əsasən,
-HƏR MƏZMUN XƏTTİ üçün ən azı 1-2 YENİ standart təklif et (cəmi minimum 3-4 yeni standart).
 
-Hər yeni standart üçün GENIŞ ƏSASLANDIRMA yaz:
-- Bu standart HANSI BOŞLUĞU doldurur?
-- HANSl ÖLKƏ/ÖLKƏLƏR-in standartlarından ilhamlanıb?
-- PISA/PIRLS/CEFR-in HANSl TƏLƏBİNƏ cavab verir?
-- BLOOM-un hansı səviyyəsini gücləndirir?
-- Bu yaş qrupu üçün NİYƏ vacibdir?
-- Praktiki TƏTBİQ nümunəsi (1-2 cümlə)
-
-Yeni standart kodları mövcud kodlardan SONRA gəlməlidir.
-Məsələn: mövcud sonuncu 1.1.4 isə, yeni: 1.1.5, 1.1.6...
 
 ═══════════════════════════════════════════
 CAVAB FORMATI — YALNIZ JSON
 ═══════════════════════════════════════════
 {
   "umumi_qiymetlendirme": "Mövcud standartların ümumi güclü və zəif tərəfləri. PISA/PIRLS/CEFR/Bloom balansı. Əsas boşluqların xülasəsi. 6 ölkə ilə müqayisənin nəticəsi (5-8 cümlə, ətraflı).",
-  "beynelxalq_muqayise": {
-    "pisa_bosluqlari": "PISA çərçəvəsində aşkar edilən boşluqlar",
-    "pirls_bosluqlari": "PIRLS çərçəvəsində aşkar edilən boşluqlar",
-    "cefr_uygunlugu": "CEFR ', cefr_sev, ' səviyyəsinə uyğunluq qiymətləndirməsi",
-    "bloom_balansi": "Bloom taksonomiyası üzrə balans təhlili",
-    "olke_muqayisesi": "6 ölkə ilə müqayisənin xülasəsi — hər ölkədən əsas fərq"
-  },
   "standartlar": [
     {
-      "standart_kodu": "1.1.1",
-      "alt_standart_kodu": "1.1.1.1",
-      "standart_metni": "Standart mətni",
-      "alt_standart_metni": "Alt standart mətni",
+      "standart_kodu": "1.1",
+      "alt_standart_kodu": "1-1.1.1",
+      "kohne_metni": "Standartın orijinal mətni",
+      "yeni_metni": "Yeni təkmilləşdirilmiş mətn (dəyişməyibsə kohne_metni ilə eyni)",
       "mezmun_xetti": "Dinləmə və danışma",
-      "bloom_seviyyesi": "Anlama",
-      "status": "qalsin",
-      "esaslandirma": "Ətraflı əsaslandırma — hansı beynəlxalq çərçəvəyə uyğundur, hansı ölkələrdə oxşar standart var (3-5 cümlə)"
-    }
-  ],
-  "yeni_teklifler": [
-    {
-      "standart_kodu": "1.1.5",
-      "alt_standart_kodu": "1.1.5.1",
-      "standart_metni": "Yeni standart mətni",
-      "alt_standart_metni": "Yeni alt standart mətni",
-      "mezmun_xetti": "Oxu",
-      "bloom_seviyyesi": "Analiz",
-      "cetinlik": "orta",
-      "esaslandirma": "GENİŞ ƏSASLANDIRMA: 1) Hansı boşluğu doldurur 2) Hansı ölkə/ölkələrin standartlarından ilhamlanıb 3) PISA/PIRLS/CEFR-in hansı tələbinə cavab verir 4) Bloom-un hansı səviyyəsini gücləndirir 5) Bu yaş qrupu üçün niyə vacibdir 6) Praktiki tətbiq nümunəsi (minimum 5-6 cümlə)"
+      "bloom_taksonomiyasi": "Anlama",
+      "cetinlik_seviyyesi": "asan",
+      "status": "deyismeyib",
+      "xarakteristika": "DEYİSMEYİB: hansı çərçəvəyə uyğundur, güclü tərəfi (2-3 cümlə). YENİLENİB: köhnədə hansı boşluq var idi, yeni mətn hansı tələbi ödəyir, hansı ölkə modelindən ilhamlanıb (5-6 cümlə). SİLİNİB: niyə lazım deyil (2-3 cümlə)."
     }
   ]
 }
 
-status dəyərləri: "qalsin", "yenilensin", "silinsin"
-cetinlik dəyərləri: "asan", "orta", "cetin"
+status dəyərləri YALNIZ 3 ola bilər: "deyismeyib", "yenilenib", "silinib"
+QADAĞAN: "yeni_yazilmis" və ya "yeni" statusu YAZMAQ QADAĞANDIR! Yeni standartlar burada YOX, ayrı funksiyada əlavə olunur.
+Sən YALNIZ mövcud standartları təhlil edirsən — yeni standart təklif ETMƏ!
 Bloom: Xatırlama, Anlama, Tətbiq, Analiz, Qiymətləndirmə, Yaratma
+Cetinlik: asan, orta, cetin
 Məzmun xətləri: Dinləmə və danışma, Oxu, Yazı, Dil qaydaları
 
 KRİTİK QAYDALAR:
-1. "yeni_teklifler" massivi BOŞ OLMAMALIDIR! Minimum 3-4 yeni standart təklif et.
-2. Hər yeni standart üçün minimum 5-6 cümlə əsaslandırma yaz.
-3. Yeni standartlar rəqəmsal savadlılıq, media savadlılığı, kritik düşüncə, çoxsaylı mənbələrdən sintez, inteqrativ bacarıqlar kimi müasir tələbləri əhatə etməlidir.
-4. Əsaslandırmada KONKRET ölkə adı və çərçəvə adı göstər.
-5. YALNIZ JSON formatında cavab ver, başqa heç nə yazma.
+1. "standartlar" massivində BÜTÜN mövcud standartlar OLMALIDIR! Heç birini buraxma — hər standart üçün status təyin et.
+2. YENİLƏNƏNLƏRİN SAYI 3-dən 5-ə qədər olmalıdır. Hər sinif üçün fərqli say ola bilər — bəzən 3, bəzən 4, bəzən 5. Ən ciddi problemləri olan standartları seç. HƏR SİNİFDƏ DƏQİQ EYNİ SAY OLMAMALIDIR!
+3. "yenilenib" statusu ver əgər:
+   - Standart müasir beynəlxalq tələblərə uyğun deyil (PISA/PIRLS/CEFR boşluğu var)
+   - Bloom səviyyəsi bu sinif üçün uyğun deyil
+   - Standart qeyri-müəyyəndir, ölçülə bilən nəticə vermir
+   - Standartda aktiv komponent yoxdur, yalnız passiv bacarıq var
+4. "silinib" statusu nadir hallarda ver — yalnız standart artıq tamamilə mənasız olanda.
+5. "yenilenib" statuslu standartlarda "yeni_metni" FƏRQLI OLMALIDIR — köhnə ilə eyni yazmaq QADAĞANDIR!
+6. "deyismeyib" statuslu standartlarda "yeni_metni" = "kohne_metni" olmalıdır.
+7. YALNIZ JSON formatında cavab ver, başqa heç nə yazma.
+8. Əsaslandırmada KONKRET ölkə adı və çərçəvə adı göstər.
+9. "xarakteristika" sahəsi VACİBDİR! "deyismeyib" üçün 2-3 cümlə (qısa: hansı çərçəvəyə uyğundur). "yenilenib" üçün 4-5 cümlə (nə dəyişdi, niyə dəyişdi, hansı beynəlxalq çərçəvə və ölkə modeli əsas götürüldü). Mütəxəssislər bu izahatı oxuyub razılaşmalıdır.
 
 ═══════════════════════════════════════════
-HƏR STANDART ÜÇÜN KONKRET YOXLAMA KRİTERİYALARI:
+YOXLAMA KRİTERİYALARI (yalnız ciddi pozuntular üçün "yenilenib"):
 ═══════════════════════════════════════════
-Hər standartı aşağıdakı konkret kriteriyalara görə yoxla. Əgər hər hansı kriteriya pozulursa, status "yenilensin" olmalıdır:
 
-A) BLOOM TAKSONOMİYASI YOXLAMASI:
-   - Bu sinif səviyyəsi üçün Bloom balansı düzgündürmü?
-   - 1-2-ci siniflər: əsasən Xatırlama, Anlama, az Tətbiq olmalı. Amma YALNIZ "adlandırır", "sadalayır" kimi passiv fellər varsa → "yenilensin" (aktiv fell əlavə et: "fərqləndirir", "qruplaşdırır")
-   - 3-4-cü siniflər: Anlama, Tətbiq ağırlıqlı, az Analiz olmalı
-   - 5-7-ci siniflər: Tətbiq, Analiz ağırlıqlı olmalı
-   - 8-9-cu siniflər: Analiz, Qiymətləndirmə ağırlıqlı olmalı
-   - 10-11-ci siniflər: Qiymətləndirmə, Yaratma ağırlıqlı olmalı
-   - Əgər standartın feli Bloom səviyyəsinə uyğun gəlmirsə → "yenilensin"
+A) BLOOM TAKSONOMİYASI — yalnız çox aydın uyğunsuzluq varsa yenilə:
+   - 1-2-ci siniflər: əsasən Xatırlama, Anlama olmalı
+   - 5-7-ci siniflər: Tətbiq, Analiz olmalı
+   - 10-11-ci siniflər: Qiymətləndirmə, Yaratma olmalı
 
-B) CEFR UYĞUNLUQ YOXLAMASI:
-   - A1 (1-2 sinif): sadə cümlələr, tanış mövzular, əsas ehtiyaclar
-   - A2 (3-4 sinif): gündəlik ifadələr, sadə təsvirlər, qısa mətnlər
-   - B1 (5-7 sinif): əsas fikirləri anlama, şəxsi fikir bildirmə, əlaqəli mətn yaratma
-   - B2 (8-9 sinif): mürəkkəb mətnlərin əsas fikirlərini anlama, səlis ünsiyyət, ətraflı mətn
-   - C1 (10-11 sinif): uzun mürəkkəb mətnlər, akademik dil, dəqiq ifadə
-   - Standart öz CEFR səviyyəsinə uyğun deyilsə (çox sadə və ya çox çətindirsə) → "yenilensin"
+B) CEFR UYĞUNLUĞU — yalnız ciddi uyğunsuzluq varsa:
+   - Standart öz sinif səviyyəsi üçün çox sadə və ya çox çətin olanda
 
-C) PISA/PIRLS BOŞLUQLARI:
-   - Rəqəmsal mətnlərlə iş — əgər standartda yoxdursa və bu sinif üçün lazımdırsa (3+ sinif) → "yenilensin"
-   - Çoxsaylı mənbələrdən məlumat sintezi — əgər yoxdursa (5+ sinif) → "yenilensin"
-   - Mənbənin etibarlılığını qiymətləndirmə — əgər yoxdursa (7+ sinif) → "yenilensin"
-   - Fakt və fikir ayrımı — əgər yoxdursa (5+ sinif) → "yenilensin"
-   - Müəllifin məqsədini/mövqeyini müəyyənləşdirmə — yoxdursa (4+ sinif) → "yenilensin"
+C) MÜASİR TƏLƏBLƏRİN əsas boşluqları — yalnız əsaslı dəyişiklik lazım olanda:
+   - Standart tamamilə passivdirsə və heç bir aktiv komponent yoxdursa
+   - Standart o qədər ümumidür ki, heç nə ölçmək mümkün deyil
 
-D) APARICI ÖLKƏ MÜQAYİSƏSİ BOŞLUQLARI:
-   - Finlandiya: media savadlılığı, çoxmodal mətnlər (şəkil+mətn) — yoxdursa yenilə
-   - Sinqapur: özünüqiymətləndirmə, real həyat konteksti — yoxdursa yenilə
-   - Estoniya: rəqəmsal mühitdə naviqasiya — yoxdursa yenilə
-   - Yaponiya: mətn strukturunu anlamaq, yazıçı niyyəti — yoxdursa yenilə
-   - Kanada: inklüziv yanaşma, əməkdaşlıq ilə öyrənmə — yoxdursa yenilə
-   - İrlandiya: dinləmə strategiyaları, multimodal mətnlər — yoxdursa yenilə
-
-E) MÜASİR TƏLƏBLƏRİN YOXLAMASI:
-   - Standartda yalnız passiv bacarıq varsa (dinləyir, oxuyur) və aktiv/yaradıcı komponent yoxdursa → "yenilensin"
-   - Standart çox ümumidirsə (dəqiq ölçülə bilən nəticə yoxdursa) → "yenilensin"
-   - Standart yalnız bilik səviyyəsindədirsə və tətbiq komponenti yoxdursa → "yenilensin"
-
-DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalıdır — köhnə ilə eyni yazmaq QADAĞANDIR! Yeni mətn konkret olaraq hansı boşluğu doldurduğunu əks etdirməlidir.')
+DİQQƏT: Standart əsasən yaxşıdırsa, kiçik çatışmazlıqlar varsa belə "deyismeyib" statusu ver və xarakteristikada qeyd et. BOŞLUQLARI "Yeni standart təklif et" düyməsi ilə ayrıca dolduracağıq.')
 
     session$onFlushed(function() {
       res <- call_claude(prompt)
@@ -1401,46 +1381,202 @@ DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalı
           json_text <- gsub("```json\\s*", "", json_text)
           json_text <- gsub("```\\s*$", "", json_text)
           json_text <- gsub("```", "", json_text)
-          # { ... } arasını tap
           m <- regmatches(json_text, regexpr("\\{[\\s\\S]*\\}", json_text, perl = TRUE))
-          if (length(m) == 0) stop("JSON tapılmadı")
+          if (length(m) == 0) stop("JSON tapilmadi")
           parsed <- fromJSON(m[1], simplifyDataFrame = TRUE)
 
-          # Nəticəni saxla (onFlushed callback-dan isolate lazımdır)
-          isolate(step1_results(parsed))
-
-          # --- Gözəl HTML render ---
-          umumi <- if (!is.null(parsed$umumi_qiymetlendirme)) parsed$umumi_qiymetlendirme else ""
           std_df <- parsed$standartlar
-          yeni_df <- parsed$yeni_teklifler
+          umumi <- if (!is.null(parsed$umumi_qiymetlendirme)) parsed$umumi_qiymetlendirme else ""
 
-          # Rəng xəritəsi
-          status_renk <- c("qalsin" = "#4CAF50", "yenilensin" = "#FF9800", "silinsin" = "#F44336")
-          status_adi <- c("qalsin" = "QALSIN", "yenilensin" = "YENİLƏNSİN", "silinsin" = "SİLİNSİN")
+          # AI-dan qaytarilmayan standartlari avtomatik "deyismeyib" kimi elave et
+          n_orig <- nrow(df)
+          n_returned <- if (is.data.frame(std_df)) nrow(std_df) else 0
 
-          # Standart kartları
+          if (n_returned < n_orig) {
+            matched_idx <- c()
+            if (n_returned > 0) {
+              for (j in 1:n_returned) {
+                ai_row <- std_df[j, ]
+                ai_ak <- if ("alt_standart_kodu" %in% names(ai_row)) as.character(ai_row$alt_standart_kodu) else ""
+                ai_sk <- if ("standart_kodu" %in% names(ai_row)) as.character(ai_row$standart_kodu) else ""
+                idx <- which(as.character(df$alt_standart_kodu) == ai_ak)
+                if (length(idx) == 0) idx <- which(endsWith(as.character(df$alt_standart_kodu), ai_ak))
+                if (length(idx) == 0) idx <- which(as.character(df$standart_kodu) == ai_sk)
+                if (length(idx) > 0) matched_idx <- c(matched_idx, idx[1])
+              }
+            }
+            missing_idx <- setdiff(1:n_orig, matched_idx)
+            cat(paste0("AI ", n_returned, "/", n_orig, " standart qaytardi. ", length(missing_idx), " eksik standart deyismeyib olaraq elave olunur.\n"))
+            for (mi in missing_idx) {
+              orig <- df[mi, ]
+              orig_metni <- as.character(orig$alt_standart_metni)
+              new_row <- data.frame(
+                standart_kodu = as.character(orig$standart_kodu),
+                alt_standart_kodu = as.character(orig$alt_standart_kodu),
+                kohne_metni = orig_metni,
+                yeni_metni = orig_metni,
+                mezmun_xetti = as.character(orig$mezmun_xetti),
+                bloom_taksonomiyasi = if ("bloom_seviyyesi" %in% names(orig)) as.character(orig$bloom_seviyyesi) else "",
+                cetinlik_seviyyesi = "",
+                status = "deyismeyib",
+                xarakteristika = "",
+                stringsAsFactors = FALSE
+              )
+              if (is.data.frame(std_df)) {
+                for (col in setdiff(names(std_df), names(new_row))) new_row[[col]] <- ""
+                for (col in setdiff(names(new_row), names(std_df))) std_df[[col]] <- ""
+                std_df <- rbind(std_df, new_row)
+              } else {
+                std_df <- new_row
+              }
+            }
+            parsed$standartlar <- std_df
+          }
+          # yeni_yazilmis/yeni statuslu standartları sil — bu addımda yalnız deyismeyib/yenilenib/silinib olmalıdır
+          if (is.data.frame(std_df) && nrow(std_df) > 0 && "status" %in% names(std_df)) {
+            bad_status <- std_df$status %in% c("yeni_yazilmis", "yeni")
+            if (any(bad_status)) {
+              cat(paste0("XEBERDARLIQ: ", sum(bad_status), " standart yeni_yazilmis/yeni statusu ile qaytarildi — silinir!\n"))
+              std_df <- std_df[!bad_status, , drop=FALSE]
+            }
+          }
+          cat(paste0("Yekun standart sayi: ", nrow(std_df), " (orijinal: ", n_orig, ")\n"))
+
+          # ===== BAZAYA YAZ =====
+          sinif_val <- as.integer(isolate(input$sinif_sec))
+          tryCatch({
+            if (!USE_CSV) {
+              con_w <- get_con()
+              dbExecute(con_w, paste0("DELETE FROM yekun_standartlar WHERE sinif = ", sinif_val, " AND status != 'yeni_yazilmis'"))
+
+              for (i in 1:nrow(std_df)) {
+                r <- std_df[i, ]
+                st <- if ("status" %in% names(r)) as.character(r$status) else "deyismeyib"
+                yeni_m <- if ("yeni_metni" %in% names(r)) as.character(r$yeni_metni) else ""
+                kohne_m <- if ("kohne_metni" %in% names(r)) as.character(r$kohne_metni) else ""
+                mez <- if ("mezmun_xetti" %in% names(r)) as.character(r$mezmun_xetti) else ""
+                bloom <- if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else ""
+                cetinlik <- if ("cetinlik_seviyyesi" %in% names(r)) as.character(r$cetinlik_seviyyesi) else ""
+                xarak <- if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else ""
+
+                # movcud_standartlar-dan kod-u tap
+                alt_kod_val <- if ("alt_standart_kodu" %in% names(r)) as.character(r$alt_standart_kodu) else ""
+                orig_kod <- ""
+                if (nrow(df) > 0 && nchar(alt_kod_val) > 0 && "kod" %in% names(df)) {
+                  idx_m <- which(as.character(df$alt_standart_kodu) == alt_kod_val)
+                  if (length(idx_m) == 0) idx_m <- which(endsWith(as.character(df$alt_standart_kodu), alt_kod_val))
+                  if (length(idx_m) > 0) orig_kod <- as.character(df$kod[idx_m[1]])
+                }
+
+                dbExecute(con_w, paste0(
+                  "INSERT INTO yekun_standartlar (sinif, kod, mezmun_sahesi, bloom_taksonomiyasi, cetinlik_seviyyesi, status, standart_metni, xarakteristika, kohne_standart_metni) VALUES (",
+                  sinif_val, ", ",
+                  "'", gsub("'", "''", orig_kod), "', ",
+                  "'", gsub("'", "''", mez), "', ",
+                  "'", gsub("'", "''", bloom), "', ",
+                  "'", gsub("'", "''", cetinlik), "', ",
+                  "'", gsub("'", "''", st), "', ",
+                  "'", gsub("'", "''", yeni_m), "', ",
+                  "'", gsub("'", "''", xarak), "', ",
+                  "'", gsub("'", "''", kohne_m), "')"
+                ))
+              }
+              dbDisconnect(con_w)
+            } else {
+              csv_path <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
+              df_old <- if (file.exists(csv_path)) read.csv(csv_path, stringsAsFactors=FALSE, fileEncoding="UTF-8") else data.frame()
+              if (nrow(df_old) > 0) df_old <- df_old[!(df_old$sinif == sinif_val & df_old$status != "yeni_yazilmis"), , drop=FALSE]
+              write_rows <- list()
+              for (i in 1:nrow(std_df)) {
+                r <- std_df[i, ]
+                alt_kod_val <- if ("alt_standart_kodu" %in% names(r)) as.character(r$alt_standart_kodu) else ""
+                orig_kod <- ""
+                if (nrow(df) > 0 && nchar(alt_kod_val) > 0 && "kod" %in% names(df)) {
+                  idx_m <- which(as.character(df$alt_standart_kodu) == alt_kod_val)
+                  if (length(idx_m) > 0) orig_kod <- as.character(df$kod[idx_m[1]])
+                }
+                write_rows[[i]] <- data.frame(
+                  sinif = sinif_val,
+                  kod = orig_kod,
+                  mezmun_sahesi = if ("mezmun_xetti" %in% names(r)) as.character(r$mezmun_xetti) else "",
+                  bloom_taksonomiyasi = if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else "",
+                  cetinlik_seviyyesi = if ("cetinlik_seviyyesi" %in% names(r)) as.character(r$cetinlik_seviyyesi) else "",
+                  status = if ("status" %in% names(r)) as.character(r$status) else "deyismeyib",
+                  standart_metni = if ("yeni_metni" %in% names(r)) as.character(r$yeni_metni) else "",
+                  xarakteristika = if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else "",
+                  kohne_standart_metni = if ("kohne_metni" %in% names(r)) as.character(r$kohne_metni) else "",
+                  stringsAsFactors = FALSE)
+              }
+              df_write <- do.call(rbind, write_rows)
+              if (nrow(df_old) > 0) {
+                common_cols <- intersect(names(df_old), names(df_write))
+                df_combined <- rbind(df_old[, common_cols, drop=FALSE], df_write[, common_cols, drop=FALSE])
+              } else df_combined <- df_write
+              write.csv(df_combined, csv_path, row.names = FALSE, fileEncoding = "UTF-8")
+            }
+
+            n_deyismeyib <- sum(std_df$status == "deyismeyib", na.rm=TRUE)
+            n_yenilenib <- sum(std_df$status == "yenilenib", na.rm=TRUE)
+            n_silinib <- sum(std_df$status == "silinib", na.rm=TRUE)
+            save_target <- if (USE_CSV) "CSV faylina" else "PostgreSQL bazasina"
+
+            output$ai_write_status <- renderUI(
+              tags$div(style="padding:20px;background:#dcfce7;border:2px solid #4CAF50;border-radius:12px;margin-top:16px;",
+                tags$h4(style="color:#166534;margin:0 0 10px 0;", paste0("Yekun standartlar ", save_target, " yazildi!")),
+                tags$p(style="font-size:16px;color:#166534;margin:0;",
+                  paste0("Sinif ", sinif_val, ": Deyismeyib: ", as.integer(n_deyismeyib),
+                         ", Yenilenib: ", as.integer(n_yenilenib),
+                         ", Silinib: ", as.integer(n_silinib),
+                         " — Cemi: ", nrow(std_df))),
+                tags$p(style="font-size:14px;color:#166534;margin:10px 0 0 0;",
+                  "'Yekun Standartlar' tab-inda butun standartlari gore bilersiniz."))
+            )
+            showNotification(paste0("Sinif ", sinif_val, ": ", nrow(std_df), " standart ", save_target, " yazildi!"), type = "message", duration = 10)
+            stats_refresh(isolate(stats_refresh()) + 1)  # Ana səhifəni yenilə
+            cat(paste0("Yekun yazildi: sinif=", sinif_val, ", deyismeyib=", n_deyismeyib, ", yenilenib=", n_yenilenib, ", silinib=", n_silinib, ", CEMI=", nrow(std_df), "\n"))
+          }, error = function(e) {
+            output$ai_write_status <- renderUI(
+              tags$div(style="padding:20px;color:#dc2626;font-weight:600;margin-top:16px;",
+                paste0("Bazaya yazma xetasi: ", e$message)))
+          })
+
+          # --- Render HTML kartlar ---
+          status_renk <- c("deyismeyib" = "#4CAF50", "yenilenib" = "#FF9800", "silinib" = "#F44336")
+          status_adi <- c("deyismeyib" = "DEYiSMEYiB", "yenilenib" = "YENiLENiB", "silinib" = "SiLiNiB")
+
           cards_html <- ""
           if (is.data.frame(std_df) && nrow(std_df) > 0) {
-            n_q <- sum(std_df$status == "qalsin", na.rm=TRUE)
-            n_y <- sum(std_df$status == "yenilensin", na.rm=TRUE)
-            n_s <- sum(std_df$status == "silinsin", na.rm=TRUE)
+            n_d <- sum(std_df$status == "deyismeyib", na.rm=TRUE)
+            n_y <- sum(std_df$status == "yenilenib", na.rm=TRUE)
+            n_s <- sum(std_df$status == "silinib", na.rm=TRUE)
 
             cards_html <- paste0(
               '<div style="display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;">',
-              '<div style="padding:10px 20px;background:#E8F5E9;border-radius:8px;font-weight:600;color:#2E7D32;">QALSIN: ', n_q, '</div>',
-              '<div style="padding:10px 20px;background:#FFF3E0;border-radius:8px;font-weight:600;color:#E65100;">YENİLƏNSİN: ', n_y, '</div>',
-              '<div style="padding:10px 20px;background:#FFEBEE;border-radius:8px;font-weight:600;color:#C62828;">SİLİNSİN: ', n_s, '</div>',
+              '<div style="padding:10px 20px;background:#E8F5E9;border-radius:8px;font-weight:600;color:#2E7D32;">DEYiSMEYiB: ', n_d, '</div>',
+              '<div style="padding:10px 20px;background:#FFF3E0;border-radius:8px;font-weight:600;color:#E65100;">YENiLENiB: ', n_y, '</div>',
+              '<div style="padding:10px 20px;background:#FFEBEE;border-radius:8px;font-weight:600;color:#C62828;">SiLiNiB: ', n_s, '</div>',
               '</div>')
 
             for (i in 1:nrow(std_df)) {
               r <- std_df[i, ]
-              st <- if (!is.null(r$status)) r$status else "qalsin"
+              st <- if ("status" %in% names(r)) as.character(r$status) else "deyismeyib"
               renk <- if (st %in% names(status_renk)) status_renk[[st]] else "#1976D2"
               ad <- if (st %in% names(status_adi)) status_adi[[st]] else st
-              kod <- if (!is.null(r$standart_kodu)) r$standart_kodu else ""
-              metn <- if (!is.null(r$standart_metni)) r$standart_metni else ""
-              esas <- if (!is.null(r$esaslandirma)) r$esaslandirma else ""
-              bloom <- if (!is.null(r$bloom_seviyyesi)) r$bloom_seviyyesi else ""
+              kod_raw <- if ("alt_standart_kodu" %in% names(r)) as.character(r$alt_standart_kodu) else if ("standart_kodu" %in% names(r)) as.character(r$standart_kodu) else ""
+              kod <- format_kod(kod_raw)
+              yeni_m <- if ("yeni_metni" %in% names(r)) as.character(r$yeni_metni) else ""
+              kohne_m <- if ("kohne_metni" %in% names(r)) as.character(r$kohne_metni) else ""
+              xarak <- if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else ""
+              bloom <- if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else ""
+
+              metn_html <- ""
+              if (st == "yenilenib") {
+                metn_html <- paste0(
+                  '<div style="font-size:14px;color:#999;text-decoration:line-through;margin-bottom:4px;">', kohne_m, '</div>',
+                  '<div style="font-size:15px;color:#333;margin-bottom:8px;font-weight:500;">', yeni_m, '</div>')
+              } else {
+                metn_html <- paste0('<div style="font-size:15px;color:#333;margin-bottom:8px;">', yeni_m, '</div>')
+              }
 
               cards_html <- paste0(cards_html,
                 '<div style="border:2px solid ', renk, ';border-radius:12px;padding:16px;margin:10px 0;background:#FAFAFA;">',
@@ -1449,141 +1585,16 @@ DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalı
                 '<div><span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#E3F2FD;color:#1565C0;margin-right:6px;">', bloom, '</span>',
                 '<span style="padding:4px 14px;border-radius:20px;font-weight:600;font-size:13px;background:', renk, ';color:white;">', ad, '</span></div>',
                 '</div>',
-                '<div style="font-size:15px;color:#333;margin-bottom:8px;">', metn, '</div>',
+                metn_html,
                 '<div style="font-size:14px;color:#555;padding:10px;background:#F5F5F5;border-radius:8px;border-left:4px solid ', renk, ';">',
-                '<b>Əsaslandırma:</b> ', esas, '</div>',
+                '<b>Xarakteristika:</b> ', xarak, '</div>',
                 '</div>')
             }
-          }
-
-          # Yeni təkliflər
-          yeni_html <- ""
-          if (is.data.frame(yeni_df) && nrow(yeni_df) > 0) {
-            yeni_html <- paste0('<h2 style="color:#1565C0;margin-top:28px;border-bottom:2px solid #42A5F5;padding-bottom:8px;">',
-                                'Yeni Standart Təklifləri (', nrow(yeni_df), ' ədəd)</h2>')
-            for (i in 1:nrow(yeni_df)) {
-              r <- yeni_df[i, ]
-              kod <- if (!is.null(r$standart_kodu)) r$standart_kodu else ""
-              metn <- if (!is.null(r$standart_metni)) r$standart_metni else ""
-              esas <- if (!is.null(r$esaslandirma)) r$esaslandirma else ""
-              bloom <- if (!is.null(r$bloom_seviyyesi)) r$bloom_seviyyesi else ""
-              mez <- if (!is.null(r$mezmun_xetti)) r$mezmun_xetti else ""
-              cet <- if (!is.null(r$cetinlik)) r$cetinlik else ""
-
-              yeni_html <- paste0(yeni_html,
-                '<div style="border:2px solid #2196F3;border-radius:12px;padding:16px;margin:10px 0;background:#E3F2FD;">',
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">',
-                '<span style="font-weight:700;color:#0D47A1;font-size:16px;">YENİ: ', kod, '</span>',
-                '<div>',
-                '<span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#BBDEFB;color:#0D47A1;margin-right:4px;">', mez, '</span>',
-                '<span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#BBDEFB;color:#0D47A1;margin-right:4px;">', bloom, '</span>',
-                '<span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#BBDEFB;color:#0D47A1;margin-right:4px;">', cet, '</span>',
-                '<span style="padding:4px 14px;border-radius:20px;font-weight:600;font-size:13px;background:#2196F3;color:white;">YENİ</span>',
-                '</div></div>',
-                '<div style="font-size:15px;color:#333;margin-bottom:8px;">', metn, '</div>',
-                '<div style="font-size:14px;color:#555;padding:10px;background:#F5F5F5;border-radius:8px;border-left:4px solid #2196F3;">',
-                '<b>Əsaslandırma:</b> ', esas, '</div>',
-                '</div>')
-            }
-          }
-
-          # Beynəlxalq müqayisə paneli
-          muqayise_html <- ""
-          bm <- parsed$beynelxalq_muqayise
-          if (!is.null(bm) && is.list(bm)) {
-            muqayise_html <- paste0(
-              '<div style="margin:20px 0;padding:20px;background:#EDE7F6;border-radius:12px;border-left:4px solid #7E57C2;">',
-              '<h3 style="color:#4527A0;margin-top:0;">Beynəlxalq Müqayisə Təhlili</h3>',
-              if (!is.null(bm$pisa_bosluqlari)) paste0('<p><b>PISA boşluqları:</b> ', bm$pisa_bosluqlari, '</p>') else '',
-              if (!is.null(bm$pirls_bosluqlari)) paste0('<p><b>PIRLS boşluqları:</b> ', bm$pirls_bosluqlari, '</p>') else '',
-              if (!is.null(bm$cefr_uygunlugu)) paste0('<p><b>CEFR uyğunluğu:</b> ', bm$cefr_uygunlugu, '</p>') else '',
-              if (!is.null(bm$bloom_balansi)) paste0('<p><b>Bloom balansı:</b> ', bm$bloom_balansi, '</p>') else '',
-              if (!is.null(bm$olke_muqayisesi)) paste0('<p><b>6 ölkə müqayisəsi:</b> ', bm$olke_muqayisesi, '</p>') else '',
-              '</div>')
           }
 
           full_html <- paste0(
             '<div style="font-size:16px;line-height:1.7;padding:16px;background:#F8F9FA;border-radius:10px;border-left:4px solid #1976D2;margin-bottom:20px;">',
-            umumi, '</div>', muqayise_html, cards_html, yeni_html)
-
-          # Yeni təklifləri ayrıca cədvələ yaz (yeni_elave_teklifleri)
-          if (is.data.frame(yeni_df) && nrow(yeni_df) > 0) {
-            tryCatch({
-              if (USE_CSV) {
-                csv_teklif_path <- file.path(getwd(), "data", "yeni_elave_teklifleri_backup.csv")
-                df_old_t <- if (file.exists(csv_teklif_path)) {
-                  read.csv(csv_teklif_path, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
-                } else data.frame()
-                # Eyni sinif + mezmun üçün köhnə təklifləri sil
-                if (nrow(df_old_t) > 0) {
-                  if (mezmun != "all") {
-                    df_old_t <- df_old_t[!(df_old_t$sinif == as.integer(sinif) & df_old_t$mezmun_xetti %in% yeni_df$mezmun_xetti), , drop=FALSE]
-                  } else {
-                    df_old_t <- df_old_t[df_old_t$sinif != as.integer(sinif), , drop=FALSE]
-                  }
-                }
-                for (i in 1:nrow(yeni_df)) {
-                  r <- yeni_df[i, ]
-                  new_t <- data.frame(
-                    id = if (nrow(df_old_t) > 0) max(df_old_t$id, na.rm=TRUE) + i else i,
-                    sinif = as.integer(sinif),
-                    mezmun_xetti = if (!is.null(r$mezmun_xetti)) as.character(r$mezmun_xetti) else "",
-                    standart_kodu = if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else "",
-                    standart_metni = if (!is.null(r$standart_metni)) as.character(r$standart_metni) else "",
-                    alt_standart_kodu = if (!is.null(r$alt_standart_kodu)) as.character(r$alt_standart_kodu) else "",
-                    alt_standart_metni = if (!is.null(r$alt_standart_metni)) as.character(r$alt_standart_metni) else "",
-                    bloom_seviyyesi = if (!is.null(r$bloom_seviyyesi)) as.character(r$bloom_seviyyesi) else "",
-                    cetinlik = if (!is.null(r$cetinlik)) as.character(r$cetinlik) else "",
-                    cefr_seviyyesi = cefr_sev,
-                    esaslandirma = if (!is.null(r$esaslandirma)) as.character(r$esaslandirma) else "",
-                    pisa_elaqesi = "", pirls_elaqesi = "", olke_istinad = "",
-                    status = "teklif",
-                    yaradilma_tarixi = as.character(Sys.time()),
-                    stringsAsFactors = FALSE)
-                  if (nrow(df_old_t) > 0) {
-                    common <- intersect(names(df_old_t), names(new_t))
-                    df_old_t <- rbind(df_old_t[, common, drop=FALSE], new_t[, common, drop=FALSE])
-                  } else df_old_t <- new_t
-                }
-                write.csv(df_old_t, csv_teklif_path, row.names = FALSE, fileEncoding = "UTF-8")
-              } else {
-                con_t <- get_con()
-                # Eyni sinif üçün köhnə təklifləri sil
-                if (mezmun != "all") {
-                  mezmun_list <- unique(yeni_df$mezmun_xetti)
-                  for (mx in mezmun_list) {
-                    dbExecute(con_t, sprintf("DELETE FROM yeni_elave_teklifleri WHERE sinif = %d AND mezmun_xetti = '%s'",
-                      as.integer(sinif), gsub("'", "''", mx)))
-                  }
-                } else {
-                  dbExecute(con_t, sprintf("DELETE FROM yeni_elave_teklifleri WHERE sinif = %d", as.integer(sinif)))
-                }
-                for (i in 1:nrow(yeni_df)) {
-                  r <- yeni_df[i, ]
-                  dbExecute(con_t, sprintf(
-                    "INSERT INTO yeni_elave_teklifleri (sinif, mezmun_xetti, standart_kodu, standart_metni,
-                     alt_standart_kodu, alt_standart_metni, bloom_seviyyesi, cetinlik, cefr_seviyyesi,
-                     esaslandirma, status)
-                     VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', 'teklif')",
-                    as.integer(sinif),
-                    gsub("'", "''", if (!is.null(r$mezmun_xetti)) as.character(r$mezmun_xetti) else ""),
-                    gsub("'", "''", if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else ""),
-                    gsub("'", "''", if (!is.null(r$standart_metni)) as.character(r$standart_metni) else ""),
-                    gsub("'", "''", if (!is.null(r$alt_standart_kodu)) as.character(r$alt_standart_kodu) else ""),
-                    gsub("'", "''", if (!is.null(r$alt_standart_metni)) as.character(r$alt_standart_metni) else ""),
-                    gsub("'", "''", if (!is.null(r$bloom_seviyyesi)) as.character(r$bloom_seviyyesi) else ""),
-                    gsub("'", "''", if (!is.null(r$cetinlik)) as.character(r$cetinlik) else ""),
-                    cefr_sev,
-                    gsub("'", "''", if (!is.null(r$esaslandirma)) as.character(r$esaslandirma) else "")
-                  ))
-                }
-                dbDisconnect(con_t)
-              }
-              cat(sprintf("Yeni təkliflər yazıldı: sinif %s, %d təklif\n", sinif, nrow(yeni_df)))
-            }, error = function(e) {
-              cat(sprintf("Yeni təkliflər yazılarkən xəta: %s\n", e$message))
-            })
-          }
+            umumi, '</div>', cards_html)
 
           session$sendCustomMessage("ai_timer_stop", list(
             target = "ai_timer_panel", ok = TRUE,
@@ -1596,44 +1607,38 @@ DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalı
           total_tok <- res$input_tokens + res$output_tokens
           output$ai_token_display <- renderUI(
             tags$div(class = "token-display token-done",
-              sprintf("✅ Addım 1 tamamlandı | %.1f san | %s token | $%.4f",
-                      res$time_sec, formatC(total_tok, format="d", big.mark=","),
-                      (res$input_tokens * 3 + res$output_tokens * 15) / 1e6))
+              paste0("Tehlil tamamlandi | ", sprintf("%.1f", res$time_sec), " san | ",
+                     formatC(total_tok, format="d", big.mark=","), " token | $",
+                     sprintf("%.4f", (res$input_tokens * 3 + res$output_tokens * 15) / 1e6)))
           )
 
-          # HTML hesabatı yaz
+          # HTML hesabati yaz
           stats_html <- make_stats_bar(res$time_sec, res$input_tokens, res$output_tokens)
           report_dir <- file.path(getwd(), "html_reports")
           if (!dir.exists(report_dir)) dir.create(report_dir, recursive = TRUE)
-          mezmun_suffix <- if (mezmun == "all") "hamisi" else gsub("[^a-zA-Z0-9]", "_", tolower(mezmun))
-          report_file <- file.path(report_dir, sprintf("sinif_%s_%s_tehlil.html", sinif, mezmun_suffix))
+          mezmun_suffix <- if (isolate(input$mezmun_sec) == "all") "hamisi" else gsub("[^a-zA-Z0-9]", "_", tolower(isolate(input$mezmun_sec)))
+          report_file <- file.path(report_dir, paste0("sinif_", sinif_val, "_", mezmun_suffix, "_tehlil.html"))
           report_content <- paste0(
             '<!DOCTYPE html>\n<html lang="az">\n<head>\n<meta charset="UTF-8">\n',
             '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n',
-            '<title>Sinif ', sinif, ' - Təhlil</title>\n',
+            '<title>Sinif ', sinif_val, ' - Tehlil</title>\n',
             '<style>body{font-family:"Noto Sans",sans-serif;font-size:17px;line-height:1.85;max-width:1100px;margin:0 auto;padding:40px;background:#f8fafc;color:#1e293b}',
             '.header{background:linear-gradient(135deg,#0D47A1,#1976D2);color:white;padding:30px;border-radius:14px;margin-bottom:30px}',
             '.header h1{color:white;border:none;margin:0}.header p{color:#bbdefb;margin:8px 0 0}',
             '</style>\n</head>\n<body>\n',
-            '<div class="header"><h1>Sinif ', sinif, ' — Təhlil (', mezmun_label, ')</h1>',
+            '<div class="header"><h1>Sinif ', sinif_val, ' — Tehlil (', mezmun_label, ')</h1>',
             '<p>CEFR: ', cefr_sev, ' | ', CLAUDE_MODEL, ' | ', format(Sys.time(), "%Y-%m-%d %H:%M"), '</p></div>\n',
             full_html, '\n', stats_html, '\n</body>\n</html>')
           writeLines(report_content, report_file, useBytes = FALSE)
 
-          n_yeni_saved <- if (is.data.frame(yeni_df)) nrow(yeni_df) else 0
           output$ai_result <- renderUI(tagList(
             tags$div(class = "ai-output", HTML(full_html)),
             HTML(stats_html),
             tags$div(style = "margin-top:16px;padding:12px 20px;background:#dcfce7;border:1px solid #86efac;border-radius:10px;font-size:15px;color:#166534;",
-              sprintf("📄 Təhlil yazıldı: html_reports/sinif_%s_%s_tehlil.html", sinif, mezmun_suffix)),
-            if (n_yeni_saved > 0) tags$div(style = "margin-top:12px;padding:14px 20px;background:#EDE7F6;border:2px solid #7E57C2;border-radius:10px;font-size:16px;color:#4527A0;font-weight:600;",
-              sprintf("💡 %d yeni standart təklifi 'Yeni Təkliflər' tab-ına yazıldı. Orada qəbul/rədd edə bilərsiniz.", n_yeni_saved)) else NULL,
-            tags$div(style = "margin-top:12px;padding:14px 20px;background:#FFF3E0;border:2px solid #FF9800;border-radius:10px;font-size:16px;color:#E65100;font-weight:600;",
-              "👇 Addım 2: Dəyişiklik tələb edən standartlar yüklənəcək. 'Standartları yüklə' basın.")
+              paste0("Tehlil yazildi: html_reports/sinif_", sinif_val, "_", mezmun_suffix, "_tehlil.html"))
           ))
 
         }, error = function(e) {
-          # JSON parse uğursuz — raw text göstər
           session$sendCustomMessage("ai_timer_stop", list(
             target = "ai_timer_panel", ok = TRUE,
             elapsed = sprintf("%.1f", res$time_sec),
@@ -1641,7 +1646,7 @@ DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalı
             out = formatC(res$output_tokens, format="d", big.mark=","),
             cost = sprintf("$%.4f", (res$input_tokens*3 + res$output_tokens*15)/1e6)))
           output$ai_token_display <- renderUI(tags$div(class="token-display token-done",
-            sprintf("✅ %.1f san | JSON parse xətası — raw nəticə göstərilir", res$time_sec)))
+            paste0(sprintf("%.1f", res$time_sec), " san | JSON parse xetasi — raw netice gosterilir")))
           output$ai_result <- renderUI(tags$div(class = "ai-output", HTML(res$text)))
         })
 
@@ -1650,704 +1655,263 @@ DİQQƏT: "yenilensin" statusu verdikdə standartın yeni mətni FƏRQLI olmalı
           target = "ai_timer_panel", ok = FALSE,
           elapsed = sprintf("%.1f", res$time_sec), inp = "0", out = "0", cost = "$0"))
         output$ai_token_display <- renderUI(tags$div(class = "token-display token-error",
-          sprintf("❌ Xəta (%.1f san)", res$time_sec)))
+          paste0("Xeta (", sprintf("%.1f", res$time_sec), " san)")))
         output$ai_result <- renderUI(tags$div(style = "padding:30px;color:#dc2626;",
-          tags$h3("Xəta baş verdi"), tags$p(res$error)))
+          tags$h3("Xeta bas verdi"), tags$p(res$error)))
       }
     }, once = TRUE)
   })
 
   # ============================================================
-  # ADDIM 2: İNTERAKTİV SEÇİM — Standartları yüklə, status seç, AI yeniləsin
+  # YENi STANDART TEKLIF ET — Ayrica API cagirisii ile boslluqlari doldur
   # ============================================================
-
-  # 2a: Addım 1 nəticəsindən yalnız dəyişiklik tələb edən standartları yüklə
-  observeEvent(input$btn_step2_load, {
-    sinif <- input$sinif_sec
-    cefr_sev <- cefr_map[as.character(sinif)]
-    s1 <- step1_results()
-
-    if (is.null(s1)) {
-      output$step2_status <- renderUI(tags$div(style="padding:20px;color:#dc2626;font-weight:600;",
-        "❌ Əvvəlcə Addım 1-i icra edin! Təhlil nəticəsi yoxdur."))
-      return()
-    }
-
-    rows <- list()
-    rid <- 1
-
-    # Yenilənməsi təklif olunan standartlar
-    if (is.data.frame(s1$standartlar) && nrow(s1$standartlar) > 0) {
-      for (i in 1:nrow(s1$standartlar)) {
-        r <- s1$standartlar[i, ]
-        st <- if (!is.null(r$status)) r$status else "qalsin"
-        if (st %in% c("yenilensin", "silinsin")) {
-          nov <- if (st == "yenilensin") "yenilensin" else "silinsin"
-          rows[[rid]] <- data.frame(
-            id = rid,
-            sinif = as.integer(sinif),
-            mezmun_xetti = if (!is.null(r$mezmun_xetti)) as.character(r$mezmun_xetti) else "",
-            standart_kodu = if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else "",
-            standart_metni = if (!is.null(r$standart_metni)) as.character(r$standart_metni) else "",
-            alt_standart_kodu = if (!is.null(r$alt_standart_kodu)) as.character(r$alt_standart_kodu) else if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else "",
-            alt_standart_metni = if (!is.null(r$alt_standart_metni)) as.character(r$alt_standart_metni) else "",
-            deyisiklik_novu = nov,
-            esaslandirma = if (!is.null(r$esaslandirma)) as.character(r$esaslandirma) else "",
-            bloom_seviyyesi = if (!is.null(r$bloom_seviyyesi)) as.character(r$bloom_seviyyesi) else "",
-            cefr_seviyyesi = cefr_sev,
-            cetinlik = "",
-            stringsAsFactors = FALSE)
-          rid <- rid + 1
-        }
-      }
-    }
-
-    # Yeni standart təklifləri artıq ayrıca "Yeni Təkliflər" tab-ında idarə olunur
-    # Step 1 bitdikdə avtomatik yeni_elave_teklifleri cədvəlinə yazılır
-    n_yeni_teklif <- if (is.data.frame(s1$yeni_teklifler)) nrow(s1$yeni_teklifler) else 0
-
-    if (length(rows) == 0) {
-      output$step2_status <- renderUI(tags$div(style="padding:20px;color:#166534;font-weight:600;background:#dcfce7;border-radius:10px;",
-        "✅ Bütün standartlar yaxşıdır! Dəyişiklik tələb edən standart yoxdur."))
-      return()
-    }
-
-    df_all <- do.call(rbind, rows)
-    step2_data(df_all)
-
-    n_yen <- sum(df_all$deyisiklik_novu == "yenilensin", na.rm=TRUE)
-    n_sil <- sum(df_all$deyisiklik_novu == "silinsin", na.rm=TRUE)
-    output$step2_status <- renderUI(
-      tags$div(style="padding:14px 20px;background:#FFF3E0;border:2px solid #FF9800;border-radius:10px;font-size:15px;color:#E65100;",
-        tags$b(sprintf("📋 Dəyişiklik tələb edən: %d standart", nrow(df_all))),
-        tags$br(),
-        sprintf("Yenilənsin: %d | Silinsin: %d", n_yen, n_sil),
-        if (n_yeni_teklif > 0) sprintf(" | 💡 %d yeni təklif 'Yeni Təkliflər' tab-ında", n_yeni_teklif) else "",
-        tags$br(), tags$br(),
-        "Hər sətirdəki düymələrlə razılaşın və ya dəyişin. Sonra ",
-        tags$b("'AI ilə yenilə'"), " basın — AI yalnız 'Yenilə' seçilmişləri yenidən yazacaq.")
-    )
-  })
-
-  # 2b: Addım 2 cədvəli — interaktiv düymələrlə
-  output$dt_step2_review <- renderDT({
-    df <- step2_data()
-    if (nrow(df) == 0) {
-      return(datatable(data.frame(Mesaj = "📥 'Standartları yüklə' düyməsini basın"),
-                       rownames = FALSE, options = list(dom = 't')))
-    }
-
-    # Əməliyyat düymələri — "yeni" standartlar üçün Qəbul/Rədd, mövcudlar üçün Saxla/Yenilə/Sil
-    df$emeliyyat <- sapply(1:nrow(df), function(i) {
-      if (df$deyisiklik_novu[i] %in% c("yeni", "qebul", "redd")) {
-        # Yeni standart təklifi — Qəbul et / Rədd et
-        paste0(
-          '<div style="display:flex;gap:3px;flex-wrap:nowrap;">',
-          '<button class="btn btn-xs" style="background:#E8F5E9;border:1px solid #4CAF50;color:#2E7D32;font-weight:600;" ',
-            'onclick="Shiny.setInputValue(\'step2_action\', {row:', i, ', action:\'qebul\'}, {priority:\'event\'})">Qəbul et</button>',
-          '<button class="btn btn-xs" style="background:#FFEBEE;border:1px solid #F44336;color:#C62828;font-weight:600;" ',
-            'onclick="Shiny.setInputValue(\'step2_action\', {row:', i, ', action:\'redd\'}, {priority:\'event\'})">Rədd et</button>',
-          '</div>')
-      } else {
-        # Mövcud standart — Saxla/Yenilə/Sil
-        paste0(
-          '<div style="display:flex;gap:3px;flex-wrap:nowrap;">',
-          '<button class="btn btn-xs" style="background:#E3F2FD;border:1px solid #90CAF9;color:#0D47A1;font-weight:600;" ',
-            'onclick="Shiny.setInputValue(\'step2_action\', {row:', i, ', action:\'movcud\'}, {priority:\'event\'})">Saxla</button>',
-          '<button class="btn btn-xs" style="background:#E8F5E9;border:1px solid #4CAF50;color:#2E7D32;font-weight:600;" ',
-            'onclick="Shiny.setInputValue(\'step2_action\', {row:', i, ', action:\'yenilensin\'}, {priority:\'event\'})">Yenilə</button>',
-          '<button class="btn btn-xs" style="background:#FFEBEE;border:1px solid #F44336;color:#C62828;font-weight:600;" ',
-            'onclick="Shiny.setInputValue(\'step2_action\', {row:', i, ', action:\'silinsin\'}, {priority:\'event\'})">Sil</button>',
-          '</div>')
-      }
-    })
-
-    show_cols <- c("standart_kodu","alt_standart_kodu","standart_metni","alt_standart_metni","mezmun_xetti",
-                   "deyisiklik_novu","bloom_seviyyesi","cetinlik","esaslandirma","emeliyyat")
-    show_cols <- intersect(show_cols, names(df))
-    df_show <- df[, show_cols, drop=FALSE]
-    col_labels <- c("standart_kodu"="Std. Kod","alt_standart_kodu"="Alt Kod","standart_metni"="Standart",
-                    "alt_standart_metni"="Alt standart","mezmun_xetti"="Məzmun",
-                    "deyisiklik_novu"="Status","bloom_seviyyesi"="Bloom","cetinlik"="Çətinlik",
-                    "esaslandirma"="Əsaslandırma","emeliyyat"="Əməliyyat")
-    names(df_show) <- col_labels[show_cols]
-
-    datatable(df_show,
-              escape = FALSE,
-              options = list(pageLength = 25, scrollX = TRUE, autoWidth = FALSE,
-                columnDefs = list(
-                  list(width = '50px', targets = 0),
-                  list(width = '55px', targets = 1),
-                  list(width = '180px', targets = 2),
-                  list(width = '180px', targets = 3),
-                  list(width = '70px', targets = 4),
-                  list(width = '65px', targets = 5),
-                  list(width = '70px', targets = 6),
-                  list(width = '50px', targets = 7),
-                  list(width = '150px', targets = 8),
-                  list(width = '120px', targets = 9)
-                )),
-              rownames = FALSE) %>%
-      formatStyle("Status",
-                  backgroundColor = styleEqual(
-                    c("movcud", "yenilensin", "yenilenib", "yeni", "silinsin", "silinib", "qebul", "redd"),
-                    c("#E3F2FD", "#FFF3E0", "#E8F5E9", "#E3F2FD", "#FFEBEE", "#FFCDD2", "#C8E6C9", "#FFCDD2")),
-                  fontWeight = "bold")
-  })
-
-  # 2c: Status düymələri handler
-  observeEvent(input$step2_action, {
-    df <- step2_data()
-    row <- input$step2_action$row
-    action <- input$step2_action$action
-    if (row >= 1 && row <= nrow(df)) {
-      df[row, "deyisiklik_novu"] <- action
-      step2_data(df)
-
-      # Statistika göstər
-      n_sax <- sum(df$deyisiklik_novu == "movcud", na.rm=TRUE)
-      n_yen <- sum(df$deyisiklik_novu == "yenilensin", na.rm=TRUE)
-      n_sil <- sum(df$deyisiklik_novu == "silinsin", na.rm=TRUE)
-      output$step2_status <- renderUI(
-        tags$div(style="padding:12px 20px;background:#F5F5F5;border:2px solid #CFD8DC;border-radius:10px;font-size:15px;",
-          sprintf("Saxla: %d | Yenilə: %d | Sil: %d — Seçimi bitirdikdən sonra 'AI ilə yenilə' basın.",
-                  n_sax, n_yen, n_sil))
-      )
-    }
-  })
-
-  # 2d: AI yalnız "yenilensin" seçilmiş standartları yeniləyir
-  observeEvent(input$btn_step2_ai, {
-    df <- step2_data()
-    if (nrow(df) == 0) {
-      showNotification("Əvvəlcə standartları yükləyin!", type = "error")
-      return()
-    }
-
-    df_to_update <- df[df$deyisiklik_novu == "yenilensin", , drop=FALSE]
-    if (nrow(df_to_update) == 0) {
-      showNotification("Heç bir standart 'Yenilənsin' statusunda deyil! Əvvəlcə düymələrlə seçin.", type = "warning")
-      return()
-    }
-
-    sinif <- input$sinif_sec
-    cefr_sev <- cefr_map[as.character(sinif)]
-
-    session$sendCustomMessage("ai_timer_start", list(
-      target = "ai_timer_panel2",
-      status = "AI seçilmiş standartları yeniləyir...",
-      info1 = paste0(sinif, "-ci sinif"),
-      info2 = paste0(nrow(df_to_update), " standart yenilənəcək")
-    ))
-
-    output$step2_status <- renderUI(
-      tags$div(class = "token-display token-waiting",
-        sprintf("⏳ %d standart AI tərəfindən yenilənir...", nrow(df_to_update)))
-    )
-
-    session$onFlushed(function() {
-      prompt <- sprintf(
-'Sən Azərbaycan dili kurikulumu ekspertisən.
-%s-ci sinif üçün aşağıdakı standartlar YENİLƏNMƏLİDİR.
-PISA, PIRLS, CEFR (%s), Bloom taksonomiyası və Finlandiya, Sinqapur, Estoniya, Yaponiya, Kanada, İrlandiya standartları əsasında hər birinin yeni, təkmilləşdirilmiş mətnini yaz.
-
-Yenilənəcək standartlar:
-%s
-
-CAVABI YALNIZ JSON formatında ver:
-[
-  {
-    "standart_kodu": "...",
-    "standart_metni": "YENİ TƏKMİLLƏŞDİRİLMİŞ MƏTN",
-    "alt_standart_kodu": "...",
-    "alt_standart_metni": "YENİ ALT STANDART MƏTNİ",
-    "mezmun_xetti": "...",
-    "esaslandirma": "Niyə dəyişdirildi — hansı beynəlxalq çərçəvəyə əsasən",
-    "bloom_seviyyesi": "...",
-    "cefr_seviyyesi": "%s"
-  }
-]
-
-Bloom: Xatırlama, Anlama, Tətbiq, Analiz, Qiymətləndirmə, Yaratma
-YALNIZ JSON, başqa heç nə yazma.',
-        sinif, cefr_sev,
-        toJSON(df_to_update[, c("standart_kodu","standart_metni","alt_standart_metni","mezmun_xetti","bloom_seviyyesi"), drop=FALSE],
-               pretty = TRUE, auto_unbox = TRUE),
-        cefr_sev)
-
-      res <- call_claude(prompt)
-
-      if (res$success) {
-        tryCatch({
-          json_text <- extract_json_array(res$text)
-          parsed <- fromJSON(json_text, simplifyDataFrame = TRUE)
-
-          if (is.data.frame(parsed) && nrow(parsed) > 0) {
-            # Yenilənmiş mətnləri əsas data-ya yaz
-            df_current <- isolate(step2_data())
-            for (i in 1:nrow(parsed)) {
-              kod <- parsed$standart_kodu[i]
-              idx <- which(df_current$standart_kodu == kod & df_current$deyisiklik_novu == "yenilensin")
-              if (length(idx) > 0) {
-                idx <- idx[1]
-                df_current[idx, "standart_metni"] <- parsed$standart_metni[i]
-                if ("alt_standart_metni" %in% names(parsed)) df_current[idx, "alt_standart_metni"] <- parsed$alt_standart_metni[i]
-                if ("esaslandirma" %in% names(parsed)) df_current[idx, "esaslandirma"] <- parsed$esaslandirma[i]
-                if ("bloom_seviyyesi" %in% names(parsed)) df_current[idx, "bloom_seviyyesi"] <- parsed$bloom_seviyyesi[i]
-                df_current[idx, "deyisiklik_novu"] <- "yenilenib"  # yenilensin → yenilenib
-              }
-            }
-            isolate(step2_data(df_current))
-
-            session$sendCustomMessage("ai_timer_stop", list(
-              target = "ai_timer_panel2", ok = TRUE,
-              elapsed = sprintf("%.1f", res$time_sec),
-              inp = formatC(res$input_tokens, format = "d", big.mark = ","),
-              out = formatC(res$output_tokens, format = "d", big.mark = ","),
-              cost = sprintf("$%.4f", (res$input_tokens * 3 + res$output_tokens * 15) / 1e6)
-            ))
-
-            output$step2_status <- renderUI(
-              tags$div(style="padding:12px 20px;background:#dcfce7;border:2px solid #4CAF50;border-radius:10px;font-size:15px;color:#166534;font-weight:600;",
-                sprintf("✅ %d standart yeniləndi! Cədvəldə yeni mətnlər göstərilir. Addım 3 ilə bazaya yazın.", nrow(parsed)))
-            )
-          } else { stop("JSON boşdur") }
-        }, error = function(e) {
-          session$sendCustomMessage("ai_timer_stop", list(
-            target = "ai_timer_panel2", ok = FALSE,
-            elapsed = sprintf("%.1f", res$time_sec),
-            inp = formatC(res$input_tokens, format="d", big.mark=","),
-            out = formatC(res$output_tokens, format="d", big.mark=","),
-            cost = sprintf("$%.4f", (res$input_tokens*3 + res$output_tokens*15)/1e6)
-          ))
-          output$step2_status <- renderUI(
-            tags$div(class="token-display token-error", paste("❌ JSON xətası:", e$message)))
-        })
-      } else {
-        session$sendCustomMessage("ai_timer_stop", list(
-          target = "ai_timer_panel2", ok = FALSE,
-          elapsed = sprintf("%.1f", res$time_sec), inp = "0", out = "0", cost = "$0"))
-        output$step2_status <- renderUI(
-          tags$div(class="token-display token-error", paste("❌ API xətası:", res$error)))
-      }
-    }, once = TRUE)
-  })
-
-  # 2e: AI ilə yeni standart təklif et
-  observeEvent(input$btn_step2_add_new, {
-    df <- step2_data()
+  observeEvent(input$btn_new_standards, {
     sinif <- input$sinif_sec
     mezmun <- input$mezmun_sec
     cefr_sev <- cefr_map[as.character(sinif)]
-    mezmun_label <- if (mezmun == "all") "bütün məzmun xətləri" else mezmun
+    mezmun_label <- if (mezmun == "all") "butun mezmun xetleri" else mezmun
 
-    # Mövcud standartları kontekst kimi ver
+    # Movcud standartlari kontekst kimi ver
     if (USE_CSV) {
       df_existing <- csv_movcud()
       if (nrow(df_existing) > 0) {
         df_existing <- df_existing[df_existing$sinif == as.integer(sinif), , drop=FALSE]
         if (mezmun != "all") df_existing <- df_existing[df_existing$mezmun_xetti == mezmun, , drop=FALSE]
-        df_existing <- df_existing[, c("standart_kodu","standart_metni","mezmun_xetti"), drop=FALSE]
       }
     } else {
-      con <- get_con(); on.exit(dbDisconnect(con))
-      query <- sprintf("SELECT standart_kodu, standart_metni, mezmun_xetti FROM movcud_standartlar WHERE sinif = %s", sinif)
-      if (mezmun != "all") query <- paste0(query, sprintf(" AND mezmun_xetti = '%s'", mezmun))
-      df_existing <- dbGetQuery(con, query)
+      con_n <- get_con()
+      query <- paste0("SELECT * FROM movcud_standartlar WHERE sinif = ", sinif)
+      if (mezmun != "all") query <- paste0(query, " AND mezmun_xetti = '", gsub("'", "''", mezmun), "'")
+      df_existing <- dbGetQuery(con_n, query)
+      dbDisconnect(con_n)
     }
 
-    session$sendCustomMessage("ai_timer_start", list(
-      target = "ai_timer_panel2",
-      status = "AI yeni standartlar təklif edir...",
-      info1 = paste0(sinif, "-ci sinif"),
-      info2 = mezmun_label
-    ))
-
-    output$step2_status <- renderUI(
-      tags$div(class = "token-display token-waiting", "⏳ AI yeni standartlar hazırlayır..."))
-
-    session$onFlushed(function() {
-      prompt <- sprintf(
-'Sən Azərbaycan dili kurikulumu ekspertisən.
-%s-ci sinif, "%s" üçün mövcud standartlar bunlardır:
-%s
-
-Bu standartlarda PISA, PIRLS, CEFR (%s) və Bloom taksonomiyası tələblərinə görə BOŞLUQLAR var.
-Yalnız ƏKSİK olan, əlavə edilməli YENİ standartlar təklif et. Mövcudları təkrarlama.
-
-CAVABI YALNIZ JSON formatında ver:
-[
-  {
-    "standart_kodu": "YENİ KOD (məs: 1.1.5)",
-    "standart_metni": "Yeni standartın mətni",
-    "alt_standart_kodu": "...",
-    "alt_standart_metni": "Alt standart mətni",
-    "mezmun_xetti": "%s",
-    "esaslandirma": "Niyə lazımdır — hansı boşluğu doldurur",
-    "bloom_seviyyesi": "...",
-    "cefr_seviyyesi": "%s"
-  }
-]
-YALNIZ JSON, başqa heç nə.',
-        sinif, mezmun_label,
-        toJSON(df_existing, pretty=TRUE, auto_unbox=TRUE),
-        cefr_sev,
-        if (mezmun == "all") "uyğun məzmun xətti" else mezmun,
-        cefr_sev)
-
-      res <- call_claude(prompt)
-
-      if (res$success) {
-        tryCatch({
-          json_text <- extract_json_array(res$text)
-          parsed <- fromJSON(json_text, simplifyDataFrame = TRUE)
-
-          if (is.data.frame(parsed) && nrow(parsed) > 0) {
-            parsed$sinif <- as.integer(sinif)
-            parsed$deyisiklik_novu <- "yeni"
-            if (!"cefr_seviyyesi" %in% names(parsed)) parsed$cefr_seviyyesi <- cefr_sev
-            if (!"esaslandirma" %in% names(parsed)) parsed$esaslandirma <- ""
-            if (!"alt_standart_kodu" %in% names(parsed)) parsed$alt_standart_kodu <- parsed$standart_kodu
-
-            # Əsas cədvələ əlavə et
-            df_current <- isolate(step2_data())
-            required_cols <- c("id","sinif","mezmun_xetti","standart_kodu","standart_metni",
-                               "alt_standart_kodu","alt_standart_metni","deyisiklik_novu",
-                               "esaslandirma","bloom_seviyyesi","cefr_seviyyesi")
-            for (col in required_cols) {
-              if (!col %in% names(parsed)) parsed[[col]] <- ""
-            }
-            max_id <- if (nrow(df_current) > 0) max(df_current$id, na.rm=TRUE) else 0
-            parsed$id <- seq(max_id + 1, max_id + nrow(parsed))
-            df_new <- rbind(df_current, parsed[, required_cols])
-            isolate(step2_data(df_new))
-
-            session$sendCustomMessage("ai_timer_stop", list(
-              target = "ai_timer_panel2", ok = TRUE,
-              elapsed = sprintf("%.1f", res$time_sec),
-              inp = formatC(res$input_tokens, format="d", big.mark=","),
-              out = formatC(res$output_tokens, format="d", big.mark=","),
-              cost = sprintf("$%.4f", (res$input_tokens*3 + res$output_tokens*15)/1e6)
-            ))
-            output$step2_status <- renderUI(
-              tags$div(style="padding:12px 20px;background:#FFF3E0;border:2px solid #FF9800;border-radius:10px;font-size:15px;color:#E65100;font-weight:600;",
-                sprintf("✅ %d yeni standart əlavə olundu! Cədvəldə 'yeni' statusu ilə görünür.", nrow(parsed)))
-            )
-          } else { stop("JSON boşdur") }
-        }, error = function(e) {
-          session$sendCustomMessage("ai_timer_stop", list(
-            target="ai_timer_panel2", ok=FALSE, elapsed=sprintf("%.1f",res$time_sec),
-            inp=formatC(res$input_tokens,format="d",big.mark=","),
-            out=formatC(res$output_tokens,format="d",big.mark=","),
-            cost=sprintf("$%.4f",(res$input_tokens*3+res$output_tokens*15)/1e6)))
-          output$step2_status <- renderUI(
-            tags$div(class="token-display token-error", paste("❌ JSON xətası:", e$message)))
-        })
-      } else {
-        session$sendCustomMessage("ai_timer_stop", list(
-          target="ai_timer_panel2", ok=FALSE, elapsed=sprintf("%.1f",res$time_sec),
-          inp="0", out="0", cost="$0"))
-        output$step2_status <- renderUI(
-          tags$div(class="token-display token-error", paste("❌ API xətası:", res$error)))
-      }
-    }, once = TRUE)
-  })
-
-  # ============================================================
-  # ADDIM 3: BAZAYA YAZ — Seçilmiş standartları PostgreSQL-ə yaz
-  # ============================================================
-  observeEvent(input$btn_step3, {
-    df_changes <- step2_data()
-    s1 <- step1_results()
-
-    if (nrow(df_changes) == 0) {
-      output$step3_status <- renderUI(
-        tags$div(style="padding:20px;color:#dc2626;font-weight:600;",
-          "❌ Əvvəlcə Addım 2-ni icra edin! Bazaya yazmaq üçün məlumat yoxdur."))
+    if (nrow(df_existing) == 0) {
+      output$ai_new_result <- renderUI(tags$div(style="padding:30px;color:#dc2626;",
+        tags$h3("Melumat yoxdur"), tags$p("Bu sinif ucun movcud standart tapilmadi.")))
       return()
     }
 
-    sinif <- as.integer(input$sinif_sec)
-    mezmun <- input$mezmun_sec
-    cefr_sev <- cefr_map[as.character(sinif)]
+    # Movcud kodlarin sonuncu nomresini tap (yeni kodlar ucun)
+    existing_kods <- if ("kod" %in% names(df_existing)) df_existing$kod else c()
 
-    tryCatch({
-      if (!USE_CSV) {
-        con <- get_con()
-        on.exit(dbDisconnect(con))
-      }
+    session$sendCustomMessage("ai_timer_start", list(
+      target = "ai_timer_panel2",
+      status = "AI yeni standartlar teklif edir...",
+      info1 = paste0(sinif, "-ci sinif"),
+      info2 = mezmun_label
+    ))
+    output$ai_new_token_display <- renderUI(tags$div(class = "token-display token-waiting", "AI yeni standartlar hazirlayir..."))
+    output$ai_new_result <- renderUI(NULL)
+    output$ai_new_write_status <- renderUI(NULL)
 
-      # Yalnız seçilmiş məzmun xətti üçün sil (yeni təklifləri QORUYURUQ)
-      if (!USE_CSV) {
-        if (mezmun != "all") {
-          dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d AND mezmun_xetti = '%s' AND deyisiklik_novu != 'yeni'",
-                                 sinif, gsub("'", "''", mezmun)))
-        } else {
-          dbExecute(con, sprintf("DELETE FROM yenilenmi_standartlar WHERE sinif = %d AND deyisiklik_novu != 'yeni'", sinif))
-        }
-      }
+    std_cols_n <- intersect(c("standart_kodu","standart_metni","alt_standart_kodu","alt_standart_metni",
+                              "mezmun_xetti","bloom_seviyyesi","kod"), names(df_existing))
+    existing_json <- toJSON(df_existing[, std_cols_n, drop=FALSE], pretty=TRUE, auto_unbox=TRUE)
 
-      # Yazılacaq sətirləri yığ: qalsin + dəyişənlər
-      all_rows <- list()
+    prompt_new <- paste0(
+'Sen Azerbaycan dili kurikulumu uzre beynelxalq ekspertisen.
+', sinif, '-ci sinif, "', mezmun_label, '" ucun movcud standartlar bunlardir:
+', existing_json, '
 
-      # 1) Addım 1-dən "qalsin" olanları əlavə et (dəyişməyənlər)
-      if (!is.null(s1) && is.data.frame(s1$standartlar)) {
-        for (i in 1:nrow(s1$standartlar)) {
-          r <- s1$standartlar[i, ]
-          st <- if (!is.null(r$status)) r$status else "qalsin"
-          if (st == "qalsin") {
-            all_rows[[length(all_rows)+1]] <- data.frame(
-              sinif = sinif,
-              mezmun_xetti = if (!is.null(r$mezmun_xetti)) as.character(r$mezmun_xetti) else "",
-              standart_kodu = if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else "",
-              standart_metni = if (!is.null(r$standart_metni)) as.character(r$standart_metni) else "",
-              alt_standart_kodu = if (!is.null(r$alt_standart_kodu)) as.character(r$alt_standart_kodu) else if (!is.null(r$standart_kodu)) as.character(r$standart_kodu) else "",
-              alt_standart_metni = if (!is.null(r$alt_standart_metni)) as.character(r$alt_standart_metni) else "",
-              deyisiklik_novu = "movcud",
-              esaslandirma = if (!is.null(r$esaslandirma)) as.character(r$esaslandirma) else "",
-              bloom_seviyyesi = if (!is.null(r$bloom_seviyyesi)) as.character(r$bloom_seviyyesi) else "",
-              cefr_seviyyesi = cefr_sev,
-              stringsAsFactors = FALSE)
-          }
-        }
-      }
+Bu sinif ucun CEFR seviyyesi: ', cefr_sev, '
 
-      # 2) Addım 2-dən dəyişənləri əlavə et (istifadəçi "ləğv" etməyibsə)
-      for (i in 1:nrow(df_changes)) {
-        row <- df_changes[i, ]
-        # "movcud" statusuna dəyişdirilibsə — artıq yuxarıda qalsin kimi yazılıb, skip
-        if (row$deyisiklik_novu == "movcud") next
-        all_rows[[length(all_rows)+1]] <- data.frame(
-          sinif = sinif,
-          mezmun_xetti = as.character(row$mezmun_xetti),
-          standart_kodu = as.character(row$standart_kodu),
-          standart_metni = as.character(row$standart_metni),
-          alt_standart_kodu = as.character(row$alt_standart_kodu),
-          alt_standart_metni = as.character(row$alt_standart_metni),
-          deyisiklik_novu = as.character(row$deyisiklik_novu),
-          esaslandirma = as.character(row$esaslandirma),
-          bloom_seviyyesi = as.character(row$bloom_seviyyesi),
-          cefr_seviyyesi = as.character(row$cefr_seviyyesi),
-          stringsAsFactors = FALSE)
-      }
+PISA, PIRLS, CEFR, Bloom taksonomiyasi ve Finlandiya, Sinqapur, Estoniya, Yaponiya, Kanada, Irlandiya standartlari esasinda BOSLLUQLARI mueyyen et ve YENI standartlar teklif et.
 
-      if (length(all_rows) == 0) {
-        output$step3_status <- renderUI(tags$div(style="padding:20px;color:#dc2626;", "Yazmaq üçün məlumat yoxdur!"))
-        return()
-      }
+Movcud standartlari TEKRARLAMA! Yalniz EKSIK olan, elave edilmeli YENI standartlar teklif et.
 
-      df_write <- do.call(rbind, all_rows)
+Yeni kodlar movcud kodlardan SONRA gelmelidir (mes: movcud son kod 4.1.3 olsa, yeni kod 4.1.4 olsun).
+Yeni standartlar ucun "kod" sahesine ', paste0("Az_dili_", rum_reqem(as.integer(sinif))), '_X.Y.Z formati yaz.
 
-      # Təklif statuslarını son statusa çevir: yenilensin → yenilenib, silinsin → silinib
-      df_write$deyisiklik_novu[df_write$deyisiklik_novu == "yenilensin"] <- "yenilenib"
-      df_write$deyisiklik_novu[df_write$deyisiklik_novu == "silinsin"] <- "silinib"
+CAVABI YALNIZ JSON formatinda ver:
+{
+  "yeni_standartlar": [
+    {
+      "kod": "', paste0("Az_dili_", rum_reqem(as.integer(sinif))), '_5.1.1",
+      "standart_metni": "Yeni standart metni",
+      "mezmun_xetti": "Dinleme ve danisma",
+      "bloom_taksonomiyasi": "Anlama",
+      "cetinlik_seviyyesi": "asan",
+      "xarakteristika": "Niye lazimdir — hansi boshlugu doldurur, hansi beynelxalq cercheveye esasen"
+    }
+  ]
+}
 
-      # Bazaya / CSV-yə yaz
-      if (USE_CSV) {
-        # CSV rejimində — mövcud CSV-ni oxu, köhnə datanı sil, yenisini əlavə et
-        csv_path <- file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv")
-        df_old <- csv_yenilenmi()
-        if (nrow(df_old) > 0) {
-          if (mezmun != "all") {
-            df_old <- df_old[!(df_old$sinif == sinif & df_old$mezmun_xetti == mezmun), , drop=FALSE]
-          } else {
-            df_old <- df_old[df_old$sinif != sinif, , drop=FALSE]
-          }
-        }
-        # df_write sütunlarını uyğunlaşdır
-        write_cols <- c("sinif","mezmun_xetti","standart_kodu","standart_metni",
-                        "alt_standart_kodu","alt_standart_metni","deyisiklik_novu",
-                        "esaslandirma","bloom_seviyyesi","cefr_seviyyesi")
-        df_write_csv <- df_write[, intersect(write_cols, names(df_write)), drop=FALSE]
-        if (nrow(df_old) > 0) {
-          # Eyni sütunları saxla
-          common_cols <- intersect(names(df_old), names(df_write_csv))
-          df_combined <- rbind(df_old[, common_cols, drop=FALSE], df_write_csv[, common_cols, drop=FALSE])
-        } else {
-          df_combined <- df_write_csv
-        }
-        write.csv(df_combined, csv_path, row.names = FALSE, fileEncoding = "UTF-8")
-      } else {
-        for (i in 1:nrow(df_write)) {
-          row <- df_write[i, ]
-          dbExecute(con, sprintf(
-            "INSERT INTO yenilenmi_standartlar (sinif, mezmun_xetti, standart_kodu, standart_metni,
-             alt_standart_kodu, alt_standart_metni, deyisiklik_novu, esaslandirma, bloom_seviyyesi, cefr_seviyyesi)
-             VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
-            sinif,
-            gsub("'", "''", as.character(row$mezmun_xetti)),
-            gsub("'", "''", as.character(row$standart_kodu)),
-            gsub("'", "''", as.character(row$standart_metni)),
-            gsub("'", "''", as.character(row$alt_standart_kodu)),
-            gsub("'", "''", as.character(row$alt_standart_metni)),
-            gsub("'", "''", as.character(row$deyisiklik_novu)),
-            gsub("'", "''", as.character(row$esaslandirma)),
-            gsub("'", "''", as.character(row$bloom_seviyyesi)),
-            gsub("'", "''", as.character(row$cefr_seviyyesi))
-          ))
-        }
-      }
+Bloom: Xatirlama, Anlama, Tetbiq, Analiz, Qiymetlendirme, Yaratma
+Cetinlik: asan, orta, cetin
 
-      n_movcud <- sum(df_write$deyisiklik_novu == "movcud", na.rm=TRUE)
-      n_yenilenib <- sum(df_write$deyisiklik_novu == "yenilenib", na.rm=TRUE)
-      n_yeni <- sum(df_write$deyisiklik_novu == "yeni", na.rm=TRUE)
-      n_silinib <- sum(df_write$deyisiklik_novu == "silinib", na.rm=TRUE)
+KRİTİK: 3-den 5-e qeder yeni standart teklif et. Her sinif ucun ferqli say ola biler (3, 4 ve ya 5). En vacib bosluqlari sec.
 
-      save_target <- if (USE_CSV) "CSV faylına" else "PostgreSQL bazasına"
-      output$step3_status <- renderUI(
-        tags$div(style="padding:20px;background:#dcfce7;border:2px solid #4CAF50;border-radius:12px;",
-          tags$h4(style="color:#166534;margin:0 0 10px 0;", sprintf("✅ %s uğurla yazıldı!", save_target)),
-          tags$p(style="font-size:16px;color:#166534;margin:0;",
-            sprintf("Sinif %d: Mövcud: %d, Yenilənib: %d, Silinib: %d — Cəmi: %d",
-                    sinif, n_movcud, n_yenilenib, n_silinib, nrow(df_write))),
-          tags$p(style="font-size:14px;color:#166534;margin:10px 0 0 0;",
-            "📚 'Yekun Standartlar' tab-ında bütün standartları görə bilərsiniz.",
-            tags$br(),
-            "💡 Yeni standartları 'Yeni Təkliflər' tab-ından qəbul edib yekuna əlavə edə bilərsiniz.",
-            tags$br(),
-            "📊 'Müqayisə' tab-ında köhnə və yeni standartları yan-yana müqayisə edə bilərsiniz.")
-        )
-      )
-      showNotification(sprintf("✅ Sinif %d: %d standart %s yazıldı!", sinif, nrow(df_write), save_target), type = "message", duration = 10)
+YALNIZ JSON, bashqa hech ne yazma.')
 
-      # ============================================================
-      # YEKUN STANDARTLAR — SQL müqayisə ilə avtomatik qurulur
-      # ============================================================
-      # movcud_standartlar (orijinal) vs yenilenmi_standartlar (yenilənmiş) müqayisə
-      # Köhnə mətn + Yeni mətn yan-yana, status avtomatik təyin olunur
-      # Tam yeni standartlar yekuna QATILMIR (ayrıca bazada saxlanılır)
-      # ============================================================
-      tryCatch({
-        if (USE_CSV) {
-          # CSV rejimində — manual müqayisə
-          df_base <- csv_movcud()
-          if (nrow(df_base) > 0) df_base <- df_base[df_base$sinif == sinif, , drop=FALSE]
-          df_yen <- csv_yenilenmi()
-          if (nrow(df_yen) > 0) df_yen <- df_yen[df_yen$sinif == sinif & df_yen$deyisiklik_novu != "yeni", , drop=FALSE]
+    session$onFlushed(function() {
+      res <- call_claude(prompt_new)
 
-          if (nrow(df_base) > 0) {
-            df_yekun <- data.frame(
-              sinif = df_base$sinif, mezmun_xetti = df_base$mezmun_xetti,
-              standart_kodu = df_base$standart_kodu, alt_standart_kodu = df_base$alt_standart_kodu,
-              standart_metni = df_base$standart_metni, alt_standart_metni = df_base$alt_standart_metni,
-              yeni_standart_metni = df_base$standart_metni, yeni_alt_standart_metni = df_base$alt_standart_metni,
-              bloom_seviyyesi = if ("bloom_seviyyesi" %in% names(df_base)) df_base$bloom_seviyyesi else "",
-              cefr_seviyyesi = cefr_sev, esaslandirma = "", beynelxalq_istinad = "",
-              status = "movcud", stringsAsFactors = FALSE)
-            # Yenilenmi ilə müqayisə
-            if (nrow(df_yen) > 0) {
-              for (i in 1:nrow(df_yen)) {
-                row <- df_yen[i, ]
-                ak <- as.character(row$alt_standart_kodu)
-                idx <- which(df_yekun$alt_standart_kodu == ak)
-                if (length(idx) > 0) {
-                  idx <- idx[1]
-                  new_text <- as.character(row$alt_standart_metni)
-                  old_text <- df_yekun$alt_standart_metni[idx]
-                  if (row$deyisiklik_novu == "silinib") {
-                    df_yekun$status[idx] <- "silinib"
-                    df_yekun$yeni_standart_metni[idx] <- ""
-                    df_yekun$yeni_alt_standart_metni[idx] <- ""
-                  } else if (!is.na(new_text) && new_text != old_text) {
-                    df_yekun$yeni_standart_metni[idx] <- as.character(row$standart_metni)
-                    df_yekun$yeni_alt_standart_metni[idx] <- new_text
-                    df_yekun$status[idx] <- "yenilenib"
-                  }
-                  df_yekun$bloom_seviyyesi[idx] <- if ("bloom_seviyyesi" %in% names(row)) as.character(row$bloom_seviyyesi) else df_yekun$bloom_seviyyesi[idx]
-                  df_yekun$esaslandirma[idx] <- if ("esaslandirma" %in% names(row) && nchar(as.character(row$esaslandirma)) > 0) as.character(row$esaslandirma) else df_yekun$esaslandirma[idx]
-                }
+      if (res$success) {
+        tryCatch({
+          json_text <- res$text
+          json_text <- gsub("```json\\s*", "", json_text)
+          json_text <- gsub("```\\s*$", "", json_text)
+          json_text <- gsub("```", "", json_text)
+          m <- regmatches(json_text, regexpr("\\{[\\s\\S]*\\}", json_text, perl = TRUE))
+          if (length(m) == 0) stop("JSON tapilmadi")
+          parsed_new <- fromJSON(m[1], simplifyDataFrame = TRUE)
+          yeni_df <- parsed_new$yeni_standartlar
+
+          if (!is.data.frame(yeni_df) || nrow(yeni_df) == 0) stop("Yeni standart tapilmadi")
+          # Maksimum 5 yeni standart
+          if (nrow(yeni_df) > 5) yeni_df <- yeni_df[1:5, , drop=FALSE]
+
+          sinif_val <- as.integer(isolate(input$sinif_sec))
+
+          # Bazaya yaz (APPEND - movcudlari silme)
+          tryCatch({
+            if (!USE_CSV) {
+              con_nw <- get_con()
+              for (i in 1:nrow(yeni_df)) {
+                r <- yeni_df[i, ]
+                kod_val <- if ("kod" %in% names(r)) as.character(r$kod) else ""
+                mez <- if ("mezmun_xetti" %in% names(r)) as.character(r$mezmun_xetti) else ""
+                bloom <- if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else ""
+                cetinlik <- if ("cetinlik_seviyyesi" %in% names(r)) as.character(r$cetinlik_seviyyesi) else ""
+                metn <- if ("standart_metni" %in% names(r)) as.character(r$standart_metni) else ""
+                xarak <- if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else ""
+
+                dbExecute(con_nw, paste0(
+                  "INSERT INTO yekun_standartlar (sinif, kod, mezmun_sahesi, bloom_taksonomiyasi, cetinlik_seviyyesi, status, standart_metni, xarakteristika, kohne_standart_metni) VALUES (",
+                  sinif_val, ", ",
+                  "'", gsub("'", "''", kod_val), "', ",
+                  "'", gsub("'", "''", mez), "', ",
+                  "'", gsub("'", "''", bloom), "', ",
+                  "'", gsub("'", "''", cetinlik), "', ",
+                  "'yeni_yazilmis', ",
+                  "'", gsub("'", "''", metn), "', ",
+                  "'", gsub("'", "''", xarak), "', ",
+                  "'')"
+                ))
               }
+              dbDisconnect(con_nw)
+            } else {
+              csv_path <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
+              df_old <- if (file.exists(csv_path)) read.csv(csv_path, stringsAsFactors=FALSE, fileEncoding="UTF-8") else data.frame()
+              for (i in 1:nrow(yeni_df)) {
+                r <- yeni_df[i, ]
+                new_row <- data.frame(
+                  sinif = sinif_val,
+                  kod = if ("kod" %in% names(r)) as.character(r$kod) else "",
+                  mezmun_sahesi = if ("mezmun_xetti" %in% names(r)) as.character(r$mezmun_xetti) else "",
+                  bloom_taksonomiyasi = if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else "",
+                  cetinlik_seviyyesi = if ("cetinlik_seviyyesi" %in% names(r)) as.character(r$cetinlik_seviyyesi) else "",
+                  status = "yeni_yazilmis",
+                  standart_metni = if ("standart_metni" %in% names(r)) as.character(r$standart_metni) else "",
+                  xarakteristika = if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else "",
+                  kohne_standart_metni = "",
+                  stringsAsFactors = FALSE)
+                if (nrow(df_old) > 0) {
+                  common_cols <- intersect(names(df_old), names(new_row))
+                  df_old <- rbind(df_old[, common_cols, drop=FALSE], new_row[, common_cols, drop=FALSE])
+                } else df_old <- new_row
+              }
+              write.csv(df_old, csv_path, row.names = FALSE, fileEncoding = "UTF-8")
             }
-            csv_yekun_path <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
-            df_old <- if (file.exists(csv_yekun_path)) read.csv(csv_yekun_path, stringsAsFactors=FALSE, fileEncoding="UTF-8") else data.frame()
-            # Digər sinifləri saxla + eyni sinifin "yeni" statuslu standartlarını qoru
-            if (nrow(df_old) > 0) {
-              df_yeni_qorunan <- df_old[df_old$sinif == sinif & !is.na(df_old$status) & df_old$status == "yeni", , drop=FALSE]
-              df_old <- df_old[df_old$sinif != sinif, , drop=FALSE]
-              if (nrow(df_yeni_qorunan) > 0) df_old <- rbind(df_old, df_yeni_qorunan)
-            }
-            df_yekun$id <- seq_len(nrow(df_yekun))
-            if (nrow(df_old) > 0) {
-              common <- intersect(names(df_old), names(df_yekun))
-              df_combined <- rbind(df_old[, common, drop=FALSE], df_yekun[, common, drop=FALSE])
-            } else df_combined <- df_yekun
-            write.csv(df_combined, csv_yekun_path, row.names = FALSE, fileEncoding = "UTF-8")
+
+            save_target <- if (USE_CSV) "CSV faylina" else "PostgreSQL bazasina"
+            output$ai_new_write_status <- renderUI(
+              tags$div(style="padding:20px;background:#dcfce7;border:2px solid #4CAF50;border-radius:12px;margin-top:16px;",
+                tags$h4(style="color:#166534;margin:0 0 10px 0;",
+                  paste0(nrow(yeni_df), " yeni standart ", save_target, " yazildi (status: yeni_yazilmis)")),
+                tags$p(style="font-size:14px;color:#166534;margin:0;",
+                  "'Yekun Standartlar' tab-inda gore bilersiniz."))
+            )
+            showNotification(paste0(nrow(yeni_df), " yeni standart elave olundu!"), type = "message", duration = 10)
+            stats_refresh(isolate(stats_refresh()) + 1)  # Ana səhifəni yenilə
+          }, error = function(e) {
+            output$ai_new_write_status <- renderUI(
+              tags$div(style="padding:20px;color:#dc2626;font-weight:600;margin-top:16px;",
+                paste0("Bazaya yazma xetasi: ", e$message)))
+          })
+
+          # Kartlar goster
+          yeni_html <- ""
+          for (i in 1:nrow(yeni_df)) {
+            r <- yeni_df[i, ]
+            kod_val <- if ("kod" %in% names(r)) as.character(r$kod) else ""
+            metn <- if ("standart_metni" %in% names(r)) as.character(r$standart_metni) else ""
+            xarak <- if ("xarakteristika" %in% names(r)) as.character(r$xarakteristika) else ""
+            bloom <- if ("bloom_taksonomiyasi" %in% names(r)) as.character(r$bloom_taksonomiyasi) else ""
+            mez <- if ("mezmun_xetti" %in% names(r)) as.character(r$mezmun_xetti) else ""
+
+            yeni_html <- paste0(yeni_html,
+              '<div style="border:2px solid #2196F3;border-radius:12px;padding:16px;margin:10px 0;background:#E3F2FD;">',
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">',
+              '<span style="font-weight:700;color:#0D47A1;font-size:16px;">YENI: ', kod_val, '</span>',
+              '<div>',
+              '<span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#BBDEFB;color:#0D47A1;margin-right:4px;">', mez, '</span>',
+              '<span style="padding:3px 10px;border-radius:12px;font-size:12px;background:#BBDEFB;color:#0D47A1;margin-right:4px;">', bloom, '</span>',
+              '<span style="padding:4px 14px;border-radius:20px;font-weight:600;font-size:13px;background:#2196F3;color:white;">YENI</span>',
+              '</div></div>',
+              '<div style="font-size:15px;color:#333;margin-bottom:8px;">', metn, '</div>',
+              '<div style="font-size:14px;color:#555;padding:10px;background:#F5F5F5;border-radius:8px;border-left:4px solid #2196F3;">',
+              '<b>Xarakteristika:</b> ', xarak, '</div>',
+              '</div>')
           }
-        } else {
-          # PostgreSQL — SQL ilə müqayisə edib yekunu yenidən qur
-          # Əvvəlcə qəbul edilmiş yeni standartları qoru (status = 'yeni')
-          dbExecute(con, sprintf("DELETE FROM yekun_standartlar WHERE sinif = %d AND status != 'yeni'", sinif))
-          dbExecute(con, sprintf("
-            INSERT INTO yekun_standartlar (sinif, mezmun_xetti, standart_kodu, alt_standart_kodu,
-              standart_metni, alt_standart_metni, yeni_standart_metni, yeni_alt_standart_metni,
-              bloom_seviyyesi, cefr_seviyyesi, esaslandirma, beynelxalq_istinad, status)
-            SELECT
-              m.sinif, m.mezmun_xetti, m.standart_kodu, m.alt_standart_kodu,
-              m.standart_metni, m.alt_standart_metni,
-              COALESCE(y.standart_metni, m.standart_metni),
-              COALESCE(y.alt_standart_metni, m.alt_standart_metni),
-              COALESCE(y.bloom_seviyyesi, m.bloom_seviyyesi, ''),
-              '%s',
-              COALESCE(y.esaslandirma, ''),
-              '',
-              CASE
-                WHEN y.deyisiklik_novu = 'silinib' THEN 'silinib'
-                WHEN y.alt_standart_metni IS NOT NULL AND y.alt_standart_metni != m.alt_standart_metni THEN 'yenilenib'
-                ELSE 'movcud'
-              END
-            FROM movcud_standartlar m
-            LEFT JOIN yenilenmi_standartlar y
-              ON m.alt_standart_kodu = y.alt_standart_kodu
-              AND m.sinif = y.sinif
-              AND y.deyisiklik_novu != 'yeni'
-            WHERE m.sinif = %d
-            ORDER BY m.mezmun_xetti, m.standart_kodu", cefr_sev, sinif))
-        }
 
-        # Statistika
-        if (USE_CSV) {
-          n_yek <- nrow(df_yekun)
-          n_yek_movcud <- sum(df_yekun$status == "movcud", na.rm=TRUE)
-          n_yek_yenilenib <- sum(df_yekun$status == "yenilenib", na.rm=TRUE)
-          n_yek_silinib <- sum(df_yekun$status == "silinib", na.rm=TRUE)
-        } else {
-          yek_stats <- dbGetQuery(con, sprintf("SELECT status, COUNT(*) as cnt FROM yekun_standartlar WHERE sinif = %d GROUP BY status", sinif))
-          n_yek <- sum(yek_stats$cnt)
-          n_yek_movcud <- sum(yek_stats$cnt[yek_stats$status == "movcud"])
-          n_yek_yenilenib <- sum(yek_stats$cnt[yek_stats$status == "yenilenib"])
-          n_yek_silinib <- sum(yek_stats$cnt[yek_stats$status == "silinib"])
-        }
-        cat(sprintf("Yekun quruldu: mövcud=%d, yenilənib=%d, silinib=%d, CƏMİ=%d\n",
-            n_yek_movcud, n_yek_yenilenib, n_yek_silinib, n_yek))
-      }, error = function(e_yekun) cat("Yekun yazma xətası:", e_yekun$message, "\n"))
+          session$sendCustomMessage("ai_timer_stop", list(
+            target = "ai_timer_panel2", ok = TRUE,
+            elapsed = sprintf("%.1f", res$time_sec),
+            inp = formatC(res$input_tokens, format="d", big.mark=","),
+            out = formatC(res$output_tokens, format="d", big.mark=","),
+            cost = sprintf("$%.4f", (res$input_tokens*3 + res$output_tokens*15)/1e6)
+          ))
 
-      # CSV backup-ları da yenilə (yalnız PostgreSQL rejimində)
-      if (!USE_CSV) tryCatch({
-        df_all_m <- dbGetQuery(con, "SELECT * FROM movcud_standartlar ORDER BY sinif, mezmun_xetti, standart_kodu")
-        df_all_y <- dbGetQuery(con, "SELECT * FROM yenilenmi_standartlar ORDER BY sinif, mezmun_xetti, standart_kodu")
-        write.csv(df_all_m, file.path(getwd(), "data", "movcud_standartlar_backup.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-        write.csv(df_all_y, file.path(getwd(), "data", "yenilenmi_standartlar_backup.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-        cat("CSV backup yeniləndi\n")
-      }, error = function(e2) cat("CSV backup xətası:", e2$message, "\n"))
+          total_tok <- res$input_tokens + res$output_tokens
+          output$ai_new_token_display <- renderUI(
+            tags$div(class = "token-display token-done",
+              paste0("Yeni standartlar hazirlandi | ", sprintf("%.1f", res$time_sec), " san | ",
+                     formatC(total_tok, format="d", big.mark=","), " token | $",
+                     sprintf("%.4f", (res$input_tokens * 3 + res$output_tokens * 15) / 1e6)))
+          )
+          output$ai_new_result <- renderUI(tagList(
+            tags$h3(style="color:#1565C0;", paste0(nrow(yeni_df), " Yeni Standart Teklifi")),
+            HTML(yeni_html),
+            HTML(make_stats_bar(res$time_sec, res$input_tokens, res$output_tokens))
+          ))
 
-    }, error = function(e) {
-      output$step3_status <- renderUI(
-        tags$div(style="padding:20px;color:#dc2626;font-weight:600;",
-          paste("❌ Bazaya yazma xətası:", e$message)))
-      showNotification(paste("❌ Xəta:", e$message), type = "error")
-    })
+        }, error = function(e) {
+          session$sendCustomMessage("ai_timer_stop", list(
+            target = "ai_timer_panel2", ok = TRUE,
+            elapsed = sprintf("%.1f", res$time_sec),
+            inp = formatC(res$input_tokens, format="d", big.mark=","),
+            out = formatC(res$output_tokens, format="d", big.mark=","),
+            cost = sprintf("$%.4f", (res$input_tokens*3 + res$output_tokens*15)/1e6)))
+          output$ai_new_token_display <- renderUI(tags$div(class="token-display token-done",
+            paste0(sprintf("%.1f", res$time_sec), " san | JSON parse xetasi")))
+          output$ai_new_result <- renderUI(tags$div(class = "ai-output", HTML(res$text)))
+        })
+      } else {
+        session$sendCustomMessage("ai_timer_stop", list(
+          target = "ai_timer_panel2", ok = FALSE,
+          elapsed = sprintf("%.1f", res$time_sec), inp = "0", out = "0", cost = "$0"))
+        output$ai_new_token_display <- renderUI(tags$div(class = "token-display token-error",
+          paste0("Xeta (", sprintf("%.1f", res$time_sec), " san)")))
+        output$ai_new_result <- renderUI(tags$div(style = "padding:30px;color:#dc2626;",
+          tags$h3("Xeta bas verdi"), tags$p(res$error)))
+      }
+    }, once = TRUE)
   })
-  
-  # --- Addım 1 və 2 üçün reaktiv data ---
-  step1_results <- reactiveVal(NULL)  # Addım 1 JSON nəticəsi
-  step2_data <- reactiveVal(data.frame())
 
   # ============================================================
   # YEKUN STANDARTLAR TAB
   # ============================================================
 
   # Yekun data reactive
+  # Yekun tab sinif seçicisini sidebar ilə sinxronlaşdır
+  observeEvent(input$sinif_sec, {
+    updateSelectInput(session, "yekun_sinif", selected = input$sinif_sec)
+  })
+
   data_yekun <- reactive({
+    stats_refresh()  # AI yazdıqdan sonra yenilənsin
     sinif <- as.integer(input$yekun_sinif)
     tryCatch({
       if (USE_CSV) {
@@ -2359,7 +1923,7 @@ YALNIZ JSON, başqa heç nə.',
       } else {
         con <- get_con(); on.exit(dbDisconnect(con))
         df <- dbGetQuery(con, sprintf(
-          "SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY mezmun_xetti, standart_kodu", sinif))
+          "SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY CASE status WHEN 'yeni_yazilmis' THEN 1 ELSE 0 END, mezmun_sahesi, kod", sinif))
       }
       # Status filtri
       if (!is.null(input$yekun_status_filter) && input$yekun_status_filter != "all") {
@@ -2371,93 +1935,92 @@ YALNIZ JSON, başqa heç nə.',
 
   # Value boxes
   output$vb_yekun_umumi <- renderValueBox({
+    valueBox(yekun_counts()$umumi, "Ümumi", icon = icon("list"), color = "blue")
+  })
+
+  # Yekun value boxlar — filtrsiz, sinif üzrə
+  yekun_counts <- reactive({
+    stats_refresh()  # AI yazdıqdan sonra yenilənsin
     sinif <- as.integer(input$yekun_sinif)
     tryCatch({
       if (USE_CSV) {
         f <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
-        if (!file.exists(f)) return(valueBox(0L, "Ümumi", icon = icon("list"), color = "blue"))
+        if (!file.exists(f)) return(list(umumi=0L, deyismeyib=0L, yenilenib=0L, yeni_yazilmis=0L, silinib=0L))
         df <- read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
         df <- df[df$sinif == sinif, , drop=FALSE]
       } else {
         con <- get_con(); on.exit(dbDisconnect(con))
         df <- dbGetQuery(con, sprintf("SELECT status FROM yekun_standartlar WHERE sinif = %d", sinif))
       }
-      valueBox(as.integer(nrow(df)), "Ümumi", icon = icon("list"), color = "blue")
-    }, error = function(e) valueBox(0L, "Ümumi", icon = icon("list"), color = "blue"))
+      list(umumi = as.integer(nrow(df)),
+           deyismeyib = as.integer(sum(df$status == "deyismeyib", na.rm=TRUE)),
+           yenilenib = as.integer(sum(df$status == "yenilenib", na.rm=TRUE)),
+           yeni_yazilmis = as.integer(sum(df$status == "yeni_yazilmis", na.rm=TRUE)),
+           silinib = as.integer(sum(df$status == "silinib", na.rm=TRUE)))
+    }, error = function(e) list(umumi=0L, deyismeyib=0L, yenilenib=0L, yeni_yazilmis=0L, silinib=0L))
   })
-
   output$vb_yekun_movcud <- renderValueBox({
-    df <- data_yekun(); n <- if (nrow(df) > 0) as.integer(sum(df$status == "movcud", na.rm=TRUE)) else 0L
-    valueBox(n, "Dəyişməmiş", icon = icon("check"), color = "light-blue")
+    valueBox(yekun_counts()$deyismeyib, "Dəyişməyib", icon = icon("check"), color = "light-blue")
   })
   output$vb_yekun_yenilenib <- renderValueBox({
-    df <- data_yekun(); n <- if (nrow(df) > 0) as.integer(sum(df$status == "yenilenib", na.rm=TRUE)) else 0L
-    valueBox(n, "Yenilənmiş", icon = icon("edit"), color = "green")
+    valueBox(yekun_counts()$yenilenib, "Yenilənib", icon = icon("edit"), color = "green")
   })
   output$vb_yekun_yeni <- renderValueBox({
-    df <- data_yekun(); n <- if (nrow(df) > 0) as.integer(sum(df$status == "yeni", na.rm=TRUE)) else 0L
-    valueBox(n, "Yeni əlavə", icon = icon("plus"), color = "orange")
+    valueBox(yekun_counts()$yeni_yazilmis, "Yeni yazılıb", icon = icon("plus"), color = "orange")
   })
   output$vb_yekun_silinib <- renderValueBox({
-    df <- data_yekun(); n <- if (nrow(df) > 0) as.integer(sum(df$status == "silinib", na.rm=TRUE)) else 0L
-    valueBox(n, "Silinmiş", icon = icon("trash"), color = "red")
+    valueBox(yekun_counts()$silinib, "Silinib", icon = icon("trash"), color = "red")
   })
 
-  # Yekun cədvəl — Köhnə və Yeni YAN-YANA, bütün atributlar
+  # Yekun cədvəl — ilkin standartlar kimi nəfis, rəngli sətirlərlə
   output$dt_yekun <- renderDT({
     df <- data_yekun()
     if (nrow(df) == 0) {
-      return(datatable(data.frame(Mesaj = "Bu sinif üçün yekun standart yoxdur. Əvvəlcə 'Claude AI Təhlil' bölməsindən 3 addımı tamamlayın."),
+      return(datatable(data.frame(Mesaj = "Bu sinif üçün yekun standart yoxdur. Əvvəlcə 'Claude AI Təhlil' bölməsindən təhlili tamamlayın."),
                        rownames = FALSE, options = list(dom = 't')))
     }
 
     # Status adlarını Azərbaycan dilinə çevir
-    status_adi <- c("movcud" = "Dəyişməmiş", "yenilenib" = "Yenilənmiş", "silinib" = "Silinmiş", "yeni" = "Yeni əlavə")
+    status_adi_map <- c("deyismeyib" = "Dəyişməyib", "yenilenib" = "Yenilənib", "silinib" = "Silinib", "yeni_yazilmis" = "Yeni yazılıb")
     df$status_adi <- sapply(df$status, function(s) {
-      if (s %in% names(status_adi)) status_adi[s] else s
+      if (s %in% names(status_adi_map)) status_adi_map[s] else s
     })
 
-    # Yeni sütunlar mövcud deyilsə əlavə et
-    if (!"yeni_standart_metni" %in% names(df)) df$yeni_standart_metni <- df$standart_metni
-    if (!"yeni_alt_standart_metni" %in% names(df)) df$yeni_alt_standart_metni <- df$alt_standart_metni
+    kod_col <- if ("kod" %in% names(df)) df$kod else ""
+    mezmun_col <- if ("mezmun_sahesi" %in% names(df)) df$mezmun_sahesi else if ("mezmun_xetti" %in% names(df)) df$mezmun_xetti else ""
+    xarakteristika_col <- if ("xarakteristika" %in% names(df)) df$xarakteristika else ""
 
-    show_cols <- c("standart_kodu","alt_standart_kodu","mezmun_xetti",
-                   "standart_metni","yeni_standart_metni",
-                   "alt_standart_metni","yeni_alt_standart_metni",
-                   "bloom_seviyyesi","cefr_seviyyesi","esaslandirma","status_adi")
-    show_cols <- intersect(show_cols, names(df))
-    df_show <- df[, show_cols, drop=FALSE]
-    col_labels <- c("standart_kodu"="Std Kod","alt_standart_kodu"="Alt Kod","mezmun_xetti"="Məzmun xətti",
-                    "standart_metni"="Mövcud standart","yeni_standart_metni"="Yenilənmiş standart",
-                    "alt_standart_metni"="Mövcud alt standart","yeni_alt_standart_metni"="Yenilənmiş alt standart",
-                    "bloom_seviyyesi"="Bloom","cefr_seviyyesi"="CEFR",
-                    "esaslandirma"="Əsaslandırma","status_adi"="Status")
-    names(df_show) <- col_labels[show_cols]
+    df_show <- data.frame(
+      `Kod` = kod_col,
+      `Məzmun sahəsi` = mezmun_col,
+      `Status` = df$status_adi,
+      `Standart` = df$standart_metni,
+      `Xarakteristika` = xarakteristika_col,
+      check.names = FALSE, stringsAsFactors = FALSE
+    )
+    df_show[is.na(df_show)] <- ""
 
     datatable(df_show,
               options = list(pageLength = 50, scrollX = TRUE, autoWidth = FALSE,
+                dom = 'lfrtip',
                 columnDefs = list(
-                  list(width = '50px', targets = 0),   # Std Kod
-                  list(width = '55px', targets = 1),   # Alt Kod
-                  list(width = '75px', targets = 2),   # Məzmun
-                  list(width = '180px', targets = 3),  # Mövcud standart
-                  list(width = '180px', targets = 4),  # Yenilənmiş standart
-                  list(width = '180px', targets = 5),  # Mövcud alt standart
-                  list(width = '180px', targets = 6),  # Yenilənmiş alt standart
-                  list(width = '65px', targets = 7),   # Bloom
-                  list(width = '40px', targets = 8),   # CEFR
-                  list(width = '160px', targets = 9),  # Əsaslandırma
-                  list(width = '80px', targets = 10)   # Status
+                  list(width = '140px', targets = 0),
+                  list(width = '160px', targets = 1),
+                  list(width = '110px', targets = 2),
+                  list(width = '500px', targets = 3),
+                  list(width = '450px', targets = 4)
                 )),
               rownames = FALSE) %>%
-      formatStyle("Status",
+      formatStyle('Kod', fontWeight = 'bold', color = '#1565C0') %>%
+      formatStyle('Məzmun sahəsi', fontWeight = '500', color = '#37474F') %>%
+      formatStyle("Status", target = "row",
                   backgroundColor = styleEqual(
-                    c("Dəyişməmiş", "Yenilənmiş", "Silinmiş", "Yeni əlavə"),
-                    c("#E3F2FD", "#E8F5E9", "#FFEBEE", "#FFF3E0")),
+                    c("Dəyişməyib", "Yenilənib", "Silinib", "Yeni yazılıb"),
+                    c("#FFFFFF", "#E8F5E9", "#FFEBEE", "#FFF3E0")),
                   color = styleEqual(
-                    c("Dəyişməmiş", "Yenilənmiş", "Silinmiş", "Yeni əlavə"),
-                    c("#0D47A1", "#2E7D32", "#C62828", "#E65100")),
-                  fontWeight = "bold")
+                    c("Dəyişməyib", "Yenilənib", "Silinib", "Yeni yazılıb"),
+                    c("#333333", "#1B5E20", "#B71C1C", "#E65100"))) %>%
+      formatStyle("Status", fontWeight = "bold")
   })
 
   # Info mesajı
@@ -2465,31 +2028,26 @@ YALNIZ JSON, başqa heç nə.',
     df <- data_yekun()
     if (nrow(df) == 0) return(NULL)
     sinif <- input$yekun_sinif
-    n_movcud <- sum(df$status == "movcud", na.rm=TRUE)
+    n_deyismeyib <- sum(df$status == "deyismeyib", na.rm=TRUE)
     n_yenilenib <- sum(df$status == "yenilenib", na.rm=TRUE)
-    n_yeni <- sum(df$status == "yeni", na.rm=TRUE)
+    n_yeni_yazilmis <- sum(df$status == "yeni_yazilmis", na.rm=TRUE)
     n_silinib <- sum(df$status == "silinib", na.rm=TRUE)
     tags$div(style="padding:12px 18px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;font-size:14px;color:#0D47A1;",
-      sprintf("Yekun_Standartlar-%s: Cəmi %d standart — Dəyişməmiş: %d, Yenilənmiş: %d, Yeni əlavə: %d, Silinmiş: %d",
-              sinif, nrow(df), n_movcud, n_yenilenib, n_yeni, n_silinib),
-      if (n_yeni > 0) tags$br() else NULL,
-      if (n_yeni > 0) tags$span(style="color:#E65100;font-weight:600;",
-        sprintf("🟠 %d yeni standart 'Yeni Təkliflər' tab-ından qəbul edilərək əlavə olunub.", n_yeni)) else NULL)
+      sprintf("Yekun_Standartlar-%s: Cəmi %d standart — Dəyişməyib: %d, Yenilənib: %d, Yeni yazılıb: %d, Silinib: %d",
+              sinif, nrow(df), n_deyismeyib, n_yenilenib, n_yeni_yazilmis, n_silinib))
   })
 
   # Yekun CSV ixrac
   output$download_yekun_csv <- downloadHandler(
-    filename = function() { sprintf("Yekun_Standartlar_%s.csv", input$yekun_sinif) },
+    filename = function() { paste0("Yekun_Standartlar_", input$yekun_sinif, ".csv") },
     content = function(file) {
       df <- data_yekun()
       if (nrow(df) > 0) {
-        status_adi <- c("movcud" = "Dəyişməmiş", "yenilenib" = "Yenilənmiş",
-                        "yeni" = "Yeni əlavə", "silinib" = "Silinmiş")
-        df$status_adi <- sapply(df$status, function(s) if (s %in% names(status_adi)) status_adi[s] else s)
-        export_cols <- c("sinif","mezmun_xetti","standart_kodu","alt_standart_kodu",
-                         "standart_metni","yeni_standart_metni",
-                         "alt_standart_metni","yeni_alt_standart_metni",
-                         "bloom_seviyyesi","cefr_seviyyesi","esaslandirma","status_adi")
+        status_adi_map <- c("deyismeyib" = "Dəyişməyib", "yenilenib" = "Yenilənib",
+                        "yeni_yazilmis" = "Yeni yazılıb", "silinib" = "Silinib")
+        df$status_adi <- sapply(df$status, function(s) if (s %in% names(status_adi_map)) status_adi_map[s] else s)
+        export_cols <- c("sinif","kod","mezmun_sahesi","bloom_taksonomiyasi","cetinlik_seviyyesi",
+                         "standart_metni","xarakteristika","kohne_standart_metni","status_adi")
         export_cols <- intersect(export_cols, names(df))
         df <- df[, export_cols, drop=FALSE]
         names(df)[names(df) == "status_adi"] <- "Status"
@@ -2500,26 +2058,22 @@ YALNIZ JSON, başqa heç nə.',
 
   # Yekun Excel ixrac
   output$download_yekun_excel <- downloadHandler(
-    filename = function() { sprintf("Yekun_Standartlar_%s.xlsx", input$yekun_sinif) },
+    filename = function() { paste0("Yekun_Standartlar_", input$yekun_sinif, ".xlsx") },
     content = function(file) {
       df <- data_yekun()
       if (nrow(df) > 0) {
-        status_adi <- c("movcud" = "Dəyişməmiş", "yenilenib" = "Yenilənmiş",
-                        "yeni" = "Yeni əlavə", "silinib" = "Silinmiş")
-        df$status_adi <- sapply(df$status, function(s) if (s %in% names(status_adi)) status_adi[s] else s)
-        export_cols <- c("sinif","mezmun_xetti","standart_kodu","alt_standart_kodu",
-                         "standart_metni","yeni_standart_metni",
-                         "alt_standart_metni","yeni_alt_standart_metni",
-                         "bloom_seviyyesi","cefr_seviyyesi","esaslandirma","status_adi")
+        status_adi_map <- c("deyismeyib" = "Dəyişməyib", "yenilenib" = "Yenilənib",
+                        "yeni_yazilmis" = "Yeni yazılıb", "silinib" = "Silinib")
+        df$status_adi <- sapply(df$status, function(s) if (s %in% names(status_adi_map)) status_adi_map[s] else s)
+        export_cols <- c("sinif","kod","mezmun_sahesi","bloom_taksonomiyasi","cetinlik_seviyyesi",
+                         "standart_metni","xarakteristika","kohne_standart_metni","status_adi")
         export_cols <- intersect(export_cols, names(df))
         df <- df[, export_cols, drop=FALSE]
         names(df)[names(df) == "status_adi"] <- "Status"
       }
-      # writexl paketi ilə
       if (requireNamespace("writexl", quietly = TRUE)) {
         writexl::write_xlsx(df, file)
       } else {
-        # Fallback: CSV kimi yaz
         write.csv(df, file, row.names = FALSE, fileEncoding = "UTF-8")
       }
     }
@@ -2540,14 +2094,14 @@ YALNIZ JSON, başqa heç nə.',
         } else {
           con <- get_con(); on.exit(dbDisconnect(con))
           df <- dbGetQuery(con, sprintf("SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY
-            CASE status WHEN 'movcud' THEN 1 WHEN 'yenilenib' THEN 2 WHEN 'silinib' THEN 3 WHEN 'yeni' THEN 4 END,
-            mezmun_xetti, standart_kodu", sinif))
+            CASE status WHEN 'deyismeyib' THEN 1 WHEN 'yenilenib' THEN 2 WHEN 'silinib' THEN 3 WHEN 'yeni_yazilmis' THEN 4 END,
+            mezmun_sahesi, kod", sinif))
         }
       }, error = function(e) { df <<- data.frame() })
 
-      n_movcud <- sum(df$status == "movcud", na.rm=TRUE)
+      n_deyismeyib <- sum(df$status == "deyismeyib", na.rm=TRUE)
       n_yenilenib <- sum(df$status == "yenilenib", na.rm=TRUE)
-      n_yeni <- sum(df$status == "yeni", na.rm=TRUE)
+      n_yeni_yazilmis <- sum(df$status == "yeni_yazilmis", na.rm=TRUE)
       n_silinib <- sum(df$status == "silinib", na.rm=TRUE)
       tarix <- format(Sys.time(), "%d.%m.%Y %H:%M")
 
@@ -2556,31 +2110,28 @@ YALNIZ JSON, başqa heç nə.',
       if (nrow(df) > 0) {
         for (i in 1:nrow(df)) {
           r <- df[i, ]
-          st <- if (!is.na(r$status)) r$status else "movcud"
-          bg <- switch(st, "movcud"="#FFFFFF", "yenilenib"="#FFF8E1", "silinib"="#FFEBEE", "yeni"="#E8F5E9", "#FFFFFF")
-          st_label <- switch(st, "movcud"="Dəyişməmiş", "yenilenib"="Yenilənmiş", "silinib"="Silinmiş", "yeni"="Yeni əlavə", st)
-          st_color <- switch(st, "movcud"="#1565C0", "yenilenib"="#E65100", "silinib"="#C62828", "yeni"="#2E7D32", "#333")
+          st <- if (!is.na(r$status)) r$status else "deyismeyib"
+          bg <- switch(st, "deyismeyib"="#FFFFFF", "yenilenib"="#E8F5E9", "silinib"="#FFEBEE", "yeni_yazilmis"="#FFF3E0", "#FFFFFF")
+          st_label <- switch(st, "deyismeyib"="Dəyişməyib", "yenilenib"="Yenilənib", "silinib"="Silinib", "yeni_yazilmis"="Yeni yazılıb", st)
+          st_color <- switch(st, "deyismeyib"="#333", "yenilenib"="#1B5E20", "silinib"="#B71C1C", "yeni_yazilmis"="#E65100", "#333")
 
-          kohne_alt <- if ("alt_standart_metni" %in% names(r) && !is.na(r$alt_standart_metni)) r$alt_standart_metni else ""
-          yeni_alt <- if ("yeni_alt_standart_metni" %in% names(r) && !is.na(r$yeni_alt_standart_metni)) r$yeni_alt_standart_metni else ""
-          bloom <- if ("bloom_seviyyesi" %in% names(r) && !is.na(r$bloom_seviyyesi)) r$bloom_seviyyesi else ""
-          esas <- if ("esaslandirma" %in% names(r) && !is.na(r$esaslandirma)) r$esaslandirma else ""
+          kod_val <- if ("kod" %in% names(r) && !is.na(r$kod)) r$kod else ""
+          mezmun_val <- if ("mezmun_sahesi" %in% names(r) && !is.na(r$mezmun_sahesi)) r$mezmun_sahesi else ""
+          kohne_metni <- if ("kohne_standart_metni" %in% names(r) && !is.na(r$kohne_standart_metni)) r$kohne_standart_metni else ""
+          yeni_metni <- if (!is.na(r$standart_metni)) r$standart_metni else ""
+          bloom <- if ("bloom_taksonomiyasi" %in% names(r) && !is.na(r$bloom_taksonomiyasi)) r$bloom_taksonomiyasi else ""
+          xarak <- if ("xarakteristika" %in% names(r) && !is.na(r$xarakteristika)) r$xarakteristika else ""
 
-          rows_html <- paste0(rows_html, sprintf(
-            '<tr style="background:%s;">
-              <td style="font-weight:600;">%s</td>
-              <td>%s</td>
-              <td>%s</td>
-              <td>%s</td>
-              <td>%s</td>
-              <td style="color:%s;font-weight:600;">%s</td>
-              <td>%s</td>
-            </tr>\n',
-            bg,
-            if (!is.na(r$alt_standart_kodu)) r$alt_standart_kodu else "",
-            if (!is.na(r$mezmun_xetti)) r$mezmun_xetti else "",
-            kohne_alt, yeni_alt, bloom, st_color, st_label, esas
-          ))
+          rows_html <- paste0(rows_html,
+            '<tr style="background:', bg, ';">',
+              '<td style="font-weight:600;">', kod_val, '</td>',
+              '<td>', mezmun_val, '</td>',
+              '<td>', kohne_metni, '</td>',
+              '<td>', yeni_metni, '</td>',
+              '<td>', bloom, '</td>',
+              '<td style="color:', st_color, ';font-weight:600;">', st_label, '</td>',
+              '<td>', xarak, '</td>',
+            '</tr>\n')
         }
       }
 
@@ -2594,20 +2145,20 @@ YALNIZ JSON, başqa heç nə.',
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: "Segoe UI", "Noto Sans", Arial, sans-serif; background:#f5f5f5; color:#333; }
   .header { background:linear-gradient(135deg, #1565C0, #0D47A1); color:#fff; padding:30px 40px; }
-  .header h1 { font-size:28px; margin-bottom:8px; }
-  .header p { font-size:14px; opacity:0.9; }
+  .header h1 { font-size:35px; margin-bottom:8px; }
+  .header p { font-size:18px; opacity:0.9; }
   .stats { display:flex; gap:16px; padding:20px 40px; background:#fff; border-bottom:2px solid #E3F2FD; }
   .stat-box { flex:1; text-align:center; padding:16px; border-radius:10px; }
-  .stat-box .num { font-size:32px; font-weight:700; }
-  .stat-box .label { font-size:12px; margin-top:4px; }
-  .stat-movcud { background:#E3F2FD; } .stat-movcud .num { color:#1565C0; }
-  .stat-yenilenib { background:#FFF8E1; } .stat-yenilenib .num { color:#E65100; }
-  .stat-yeni { background:#E8F5E9; } .stat-yeni .num { color:#2E7D32; }
-  .stat-silinib { background:#FFEBEE; } .stat-silinib .num { color:#C62828; }
+  .stat-box .num { font-size:40px; font-weight:700; }
+  .stat-box .label { font-size:15px; margin-top:4px; }
+  .stat-movcud { background:#F5F5F5; } .stat-movcud .num { color:#333; }
+  .stat-yenilenib { background:#E8F5E9; } .stat-yenilenib .num { color:#1B5E20; }
+  .stat-yeni { background:#FFF3E0; } .stat-yeni .num { color:#E65100; }
+  .stat-silinib { background:#FFEBEE; } .stat-silinib .num { color:#B71C1C; }
   .content { padding:20px 40px; }
   table { width:100%%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-  th { background:#1565C0; color:#fff; padding:12px 10px; font-size:13px; text-align:left; }
-  td { padding:10px; font-size:13px; border-bottom:1px solid #eee; vertical-align:top; }
+  th { background:#1565C0; color:#fff; padding:14px 12px; font-size:20px; text-align:left; }
+  td { padding:12px; font-size:20px; border-bottom:1px solid #eee; vertical-align:top; line-height:1.5; }
   tr:hover { background:#F5F5F5 !important; }
   .footer { text-align:center; padding:20px; color:#999; font-size:12px; margin-top:30px; }
   @media print { body { background:#fff; } .header { background:#1565C0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
@@ -2619,22 +2170,22 @@ YALNIZ JSON, başqa heç nə.',
   <p>CEFR səviyyəsi: %s | Tarix: %s | Azərbaycan Dili Standartlarının Yenilənməsi Layihəsi</p>
 </div>
 <div class="stats">
-  <div class="stat-box stat-movcud"><div class="num">%d</div><div class="label">Dəyişməmiş</div></div>
-  <div class="stat-box stat-yenilenib"><div class="num">%d</div><div class="label">Yenilənmiş</div></div>
-  <div class="stat-box stat-yeni"><div class="num">%d</div><div class="label">Yeni əlavə</div></div>
-  <div class="stat-box stat-silinib"><div class="num">%d</div><div class="label">Silinmiş</div></div>
+  <div class="stat-box stat-movcud"><div class="num">%d</div><div class="label">Dəyişməyib</div></div>
+  <div class="stat-box stat-yenilenib"><div class="num">%d</div><div class="label">Yenilənib</div></div>
+  <div class="stat-box stat-yeni"><div class="num">%d</div><div class="label">Yeni yazılıb</div></div>
+  <div class="stat-box stat-silinib"><div class="num">%d</div><div class="label">Silinib</div></div>
 </div>
 <div class="content">
 <table>
 <thead>
   <tr>
-    <th style="width:70px;">Kod</th>
-    <th style="width:100px;">Məzmun xətti</th>
-    <th>Mövcud alt standart</th>
-    <th>Yenilənmiş alt standart</th>
+    <th style="width:100px;">Kod</th>
+    <th style="width:100px;">Məzmun sahəsi</th>
+    <th>Köhnə standart</th>
+    <th>Yeni standart</th>
     <th style="width:80px;">Bloom</th>
     <th style="width:90px;">Status</th>
-    <th>Əsaslandırma</th>
+    <th>Xarakteristika</th>
   </tr>
 </thead>
 <tbody>
@@ -2647,7 +2198,7 @@ YALNIZ JSON, başqa heç nə.',
 </div>
 </body>
 </html>',
-        sinif, sinif, cefr_sev, tarix, n_movcud, n_yenilenib, n_yeni, n_silinib, rows_html, tarix)
+        sinif, sinif, cefr_sev, tarix, n_deyismeyib, n_yenilenib, n_yeni_yazilmis, n_silinib, rows_html, tarix)
 
       writeLines(html, file, useBytes = TRUE)
 
@@ -2663,7 +2214,6 @@ YALNIZ JSON, başqa heç nə.',
   output$download_csv <- downloadHandler(
     filename = function() { sprintf("standartlar_sinif_%s.csv", input$sinif_sec) },
     content = function(file) {
-      # Yekun datanı CSV olaraq ixrac et
       sinif <- as.integer(input$sinif_sec)
       tryCatch({
         if (USE_CSV) {
@@ -2672,10 +2222,99 @@ YALNIZ JSON, başqa heç nə.',
           if (nrow(df) > 0) df <- df[df$sinif == sinif, , drop=FALSE]
         } else {
           con <- get_con(); on.exit(dbDisconnect(con))
-          df <- dbGetQuery(con, sprintf("SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY mezmun_xetti, standart_kodu", sinif))
+          df <- dbGetQuery(con, sprintf("SELECT * FROM yekun_standartlar WHERE sinif = %d ORDER BY mezmun_sahesi, kod", sinif))
         }
         write.csv(df, file, row.names = FALSE, fileEncoding = "UTF-8")
       }, error = function(e) write.csv(data.frame(xeta = e$message), file, row.names = FALSE))
+    }
+  )
+
+  # --- Word ixrac ---
+  output$download_word <- downloadHandler(
+    filename = function() { sprintf("Yekun_Standartlar_%s_sinif.docx", input$sinif_sec) },
+    content = function(file) {
+      sinif <- as.integer(input$sinif_sec)
+      tryCatch({
+        con <- get_con(); on.exit(dbDisconnect(con))
+        df <- dbGetQuery(con, sprintf(
+          "SELECT kod, mezmun_sahesi, status, standart_metni, xarakteristika FROM yekun_standartlar WHERE sinif = %d ORDER BY CASE status WHEN 'yeni_yazilmis' THEN 1 ELSE 0 END, mezmun_sahesi, kod", sinif))
+
+        if (nrow(df) == 0) {
+          doc <- read_docx()
+          doc <- body_add_par(doc, "Bu sinif ucun yekun standart yoxdur.", style = "Normal")
+          print(doc, target = file)
+          return()
+        }
+
+        status_map <- c("deyismeyib" = "Deyismeyib", "yenilenib" = "Yenilenib", "silinib" = "Silinib", "yeni_yazilmis" = "Yeni yazilmis")
+        df$status <- sapply(df$status, function(s) if (s %in% names(status_map)) status_map[s] else s)
+        df[is.na(df)] <- ""
+
+        names(df) <- c("Kod", "Mezmun sahesi", "Status", "Standart", "Xarakteristika")
+
+        doc <- read_docx()
+        doc <- body_end_section_landscape(doc)
+        doc <- body_add_par(doc, paste0("Yekun Standartlar - ", sinif, "-ci sinif"), style = "heading 1")
+        doc <- body_add_par(doc, paste0("Tarix: ", Sys.Date()), style = "Normal")
+        doc <- body_add_par(doc, "", style = "Normal")
+
+        ft <- flextable(df)
+        ft <- set_header_labels(ft, Kod = "Kod", Mezmun.sahesi = "Mezmun sahesi",
+                                Status = "Status", Standart = "Standart", Xarakteristika = "Xarakteristika")
+        ft <- width(ft, j = 1, width = 1.3)
+        ft <- width(ft, j = 2, width = 1.2)
+        ft <- width(ft, j = 3, width = 1.0)
+        ft <- width(ft, j = 4, width = 3.5)
+        ft <- width(ft, j = 5, width = 3.0)
+        ft <- fontsize(ft, size = 11, part = "body")
+        ft <- fontsize(ft, size = 12, part = "header")
+        ft <- padding(ft, padding.top = 4, padding.bottom = 4, part = "body")
+        ft <- set_table_properties(ft, layout = "autofit")
+        ft <- bold(ft, part = "header")
+        ft <- bg(ft, part = "header", bg = "#1976D2")
+        ft <- color(ft, part = "header", color = "white")
+        ft <- theme_zebra(ft, odd_body = "#FFFFFF", even_body = "#F5F5F5")
+
+        # Rənglər statusa görə
+        for (i in 1:nrow(df)) {
+          if (df$Status[i] == "Yenilenib") {
+            ft <- bg(ft, i = i, bg = "#E8F5E9")
+            ft <- color(ft, i = i, j = 3, color = "#1B5E20")
+          } else if (df$Status[i] == "Yeni yazilmis") {
+            ft <- bg(ft, i = i, bg = "#FFF3E0")
+            ft <- color(ft, i = i, j = 3, color = "#E65100")
+          } else if (df$Status[i] == "Silinib") {
+            ft <- bg(ft, i = i, bg = "#FFEBEE")
+            ft <- color(ft, i = i, j = 3, color = "#B71C1C")
+          }
+        }
+        ft <- bold(ft, j = 1)
+        ft <- bold(ft, j = 3)
+        ft <- border_outer(ft, border = fp_border(color = "#BDBDBD", width = 1))
+        ft <- border_inner(ft, border = fp_border(color = "#E0E0E0", width = 0.5))
+
+        doc <- body_add_flextable(doc, ft)
+
+        # Statistika
+        n_deyismeyib <- sum(df$Status == "Deyismeyib")
+        n_yenilenib <- sum(df$Status == "Yenilenib")
+        n_yeni <- sum(df$Status == "Yeni yazilmis")
+        n_silinib <- sum(df$Status == "Silinib")
+        doc <- body_add_par(doc, "", style = "Normal")
+        doc <- body_add_par(doc, paste0("Cemi: ", nrow(df), " standart | Deyismeyib: ", n_deyismeyib,
+          " | Yenilenib: ", n_yenilenib, " | Yeni yazilmis: ", n_yeni, " | Silinib: ", n_silinib), style = "Normal")
+
+        # Faylı yaz və word_reports-a da kopyala
+        print(doc, target = file)
+        word_dir <- file.path(getwd(), "word_reports")
+        if (!dir.exists(word_dir)) dir.create(word_dir, recursive = TRUE)
+        file.copy(file, file.path(word_dir, sprintf("Yekun_Standartlar_%d_sinif.docx", sinif)), overwrite = TRUE)
+
+      }, error = function(e) {
+        doc <- read_docx()
+        doc <- body_add_par(doc, paste0("Xeta: ", e$message), style = "Normal")
+        print(doc, target = file)
+      })
     }
   )
 
@@ -2769,6 +2408,9 @@ YALNIZ JSON, başqa heç nə.',
                    "mezmun_xetti","bloom_seviyyesi","cetinlik","esaslandirma","status_adi","emeliyyat")
     show_cols <- intersect(show_cols, names(df))
     df_show <- df[, show_cols, drop=FALSE]
+    # Oxunaqlı kod formatı
+    if ("alt_standart_kodu" %in% names(df_show)) df_show$alt_standart_kodu <- format_kod(df_show$alt_standart_kodu)
+    if ("standart_kodu" %in% names(df_show) && "sinif" %in% names(df)) df_show$standart_kodu <- format_std_kod(df_show$standart_kodu, df$sinif)
     col_labels <- c("standart_kodu"="Std. Kod","alt_standart_kodu"="Alt Kod",
                     "standart_metni"="Standart","alt_standart_metni"="Alt standart",
                     "mezmun_xetti"="Məzmun","bloom_seviyyesi"="Bloom","cetinlik"="Çətinlik",
@@ -2778,14 +2420,18 @@ YALNIZ JSON, başqa heç nə.',
     datatable(df_show,
               escape = FALSE,
               options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
+                scrollXInner = '1400px',
                 columnDefs = list(
-                  list(width = '50px', targets = 0),
-                  list(width = '55px', targets = 1),
-                  list(width = '200px', targets = 2),
-                  list(width = '200px', targets = 3),
-                  list(width = '80px', targets = 4),
-                  list(width = '250px', targets = 7),
-                  list(width = '120px', targets = 9)
+                  list(width = '100px', targets = 0),
+                  list(width = '110px', targets = 1),
+                  list(width = '300px', targets = 2),
+                  list(width = '300px', targets = 3),
+                  list(width = '120px', targets = 4),
+                  list(width = '100px', targets = 5),
+                  list(width = '80px', targets = 6),
+                  list(width = '300px', targets = 7),
+                  list(width = '90px', targets = 8),
+                  list(width = '130px', targets = 9)
                 )),
               rownames = FALSE) %>%
       formatStyle("Status",
@@ -2844,8 +2490,8 @@ YALNIZ JSON, başqa heç nə.',
         return()
       }
 
-      # Yekun standartlara əlavə et — yeni standartlar cədvəlin sonuna
-      # Köhnə sütunlar boş, yeni sütunlarda standart mətni
+      # Yekun standartlara əlavə et — yeni standartlar cədvəlin sonuna (APPEND)
+      # Mövcud son id-ni tap ki, sıralama düzgün olsun
       n_added <- 0
       if (USE_CSV) {
         yekun_path <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
@@ -2855,19 +2501,18 @@ YALNIZ JSON, başqa heç nə.',
 
         for (i in 1:nrow(df_qebul)) {
           row <- df_qebul[i, ]
-          ak <- as.character(row$alt_standart_kodu)
-          if (nrow(df_yekun) > 0 && ak %in% df_yekun$alt_standart_kodu[df_yekun$sinif == sinif]) next
+          standart_text <- if (nchar(as.character(row$alt_standart_metni)) > 0) as.character(row$alt_standart_metni) else as.character(row$standart_metni)
           new_row <- data.frame(
-            sinif = sinif, mezmun_xetti = as.character(row$mezmun_xetti),
-            standart_kodu = as.character(row$standart_kodu),
-            alt_standart_kodu = ak,
-            standart_metni = "",
-            alt_standart_metni = "",
-            yeni_standart_metni = as.character(row$standart_metni),
-            yeni_alt_standart_metni = as.character(row$alt_standart_metni),
-            bloom_seviyyesi = as.character(row$bloom_seviyyesi), cefr_seviyyesi = cefr_sev,
-            esaslandirma = as.character(row$esaslandirma), beynelxalq_istinad = "",
-            status = "yeni", stringsAsFactors = FALSE)
+            sinif = sinif,
+            kod = "",
+            mezmun_sahesi = as.character(row$mezmun_xetti),
+            bloom_taksonomiyasi = as.character(row$bloom_seviyyesi),
+            cetinlik_seviyyesi = if ("cetinlik" %in% names(row)) as.character(row$cetinlik) else "",
+            status = "yeni_yazilmis",
+            standart_metni = standart_text,
+            xarakteristika = as.character(row$esaslandirma),
+            kohne_standart_metni = "",
+            stringsAsFactors = FALSE)
           if (nrow(df_yekun) > 0) {
             common <- intersect(names(df_yekun), names(new_row))
             df_yekun <- rbind(df_yekun[, common, drop=FALSE], new_row[, common, drop=FALSE])
@@ -2878,25 +2523,17 @@ YALNIZ JSON, başqa heç nə.',
       } else {
         for (i in 1:nrow(df_qebul)) {
           row <- df_qebul[i, ]
-          ak <- as.character(row$alt_standart_kodu)
-          existing <- dbGetQuery(con, sprintf(
-            "SELECT id FROM yekun_standartlar WHERE sinif = %d AND alt_standart_kodu = '%s'",
-            sinif, gsub("'", "''", ak)))
-          if (nrow(existing) > 0) next
-          dbExecute(con, sprintf(
-            "INSERT INTO yekun_standartlar (sinif, mezmun_xetti, standart_kodu, alt_standart_kodu,
-             standart_metni, alt_standart_metni, yeni_standart_metni, yeni_alt_standart_metni,
-             bloom_seviyyesi, cefr_seviyyesi, esaslandirma, beynelxalq_istinad, status)
-             VALUES (%d, $t$%s$t$, $t$%s$t$, $t$%s$t$, '', '', $t$%s$t$, $t$%s$t$, $t$%s$t$, $t$%s$t$, $t$%s$t$, '', 'yeni')",
-            sinif,
-            as.character(row$mezmun_xetti),
-            as.character(row$standart_kodu),
-            ak,
-            as.character(row$standart_metni),
-            as.character(row$alt_standart_metni),
-            as.character(row$bloom_seviyyesi),
-            cefr_sev,
-            as.character(row$esaslandirma)
+          standart_text <- if (nchar(as.character(row$alt_standart_metni)) > 0) as.character(row$alt_standart_metni) else as.character(row$standart_metni)
+          dbExecute(con, paste0(
+            "INSERT INTO yekun_standartlar (sinif, kod, mezmun_sahesi, bloom_taksonomiyasi, cetinlik_seviyyesi, status, standart_metni, xarakteristika, kohne_standart_metni) VALUES (",
+            sinif, ", '', ",
+            "'", gsub("'", "''", as.character(row$mezmun_xetti)), "', ",
+            "'", gsub("'", "''", as.character(row$bloom_seviyyesi)), "', ",
+            "'", gsub("'", "''", if ("cetinlik" %in% names(row)) as.character(row$cetinlik) else ""), "', ",
+            "'yeni_yazilmis', ",
+            "'", gsub("'", "''", standart_text), "', ",
+            "'", gsub("'", "''", as.character(row$esaslandirma)), "', ",
+            "'')"
           ))
           n_added <- n_added + 1
         }
@@ -2907,6 +2544,7 @@ YALNIZ JSON, başqa heç nə.',
           sprintf("✅ %d yeni standart yekun standartlara əlavə olundu! 'Yekun Standartlar' tab-ına baxın.", n_added))
       )
       showNotification(sprintf("✅ %d standart yekuna əlavə olundu!", n_added), type = "message", duration = 5)
+      stats_refresh(stats_refresh() + 1)  # Ana səhifəni yenilə
     }, error = function(e) {
       showNotification(paste("Xəta:", e$message), type = "error")
       output$teklif_status_msg <- renderUI(
