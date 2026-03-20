@@ -1,5 +1,7 @@
 # Azərbaycan Dili Standartlarının Yenilənməsi Layihəsi
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ttariyel-1954/Az_dili_standartlar/HEAD?urlpath=shiny/app.R/)
+
 Bu layihə Azərbaycan Respublikasında 1-11-ci siniflər üzrə **Azərbaycan dili** fənninin mövcud standart və alt standartlarını beynəlxalq tələblərə uyğun yeniləmək, təkmilləşdirmək və yeni standartlar əlavə etmək üçün nəzərdə tutulub.
 
 ---
@@ -219,6 +221,7 @@ Brauzer: http://localhost:5678
 |-----------|------|
 | **GitHub** | [github.com/Ttariyel-1954/Az_dili_standartlar](https://github.com/Ttariyel-1954/Az_dili_standartlar) |
 | **ShinyApps.io** | [t01061954.shinyapps.io/Az_dili_standartlar](https://t01061954.shinyapps.io/Az_dili_standartlar/) |
+| **Binder** | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ttariyel-1954/Az_dili_standartlar/HEAD?urlpath=shiny/app.R/) |
 
 ---
 

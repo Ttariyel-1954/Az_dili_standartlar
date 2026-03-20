@@ -1,9 +1,12 @@
 install.packages(c(
   "shiny",
   "shinydashboard",
+  "DBI",
+  "RPostgres",
   "DT",
   "httr",
   "jsonlite",
   "plotly",
-  "writexl"
+  "officer",
+  "flextable"
 ), repos = "https://cloud.r-project.org")
