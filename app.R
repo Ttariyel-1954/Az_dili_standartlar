@@ -15,7 +15,10 @@ library(officer)
 library(flextable)
 
 # --- .env faylından konfiqurasiya oxumaq ---
-env_file <- file.path(getwd(), ".env")
+PROJECT_DIR <- normalizePath("~/projects/standards/Az_dili_standartlar", mustWork = FALSE)
+LOCAL_DIR   <- normalizePath("~/Desktop/Az_dili_standartlar", mustWork = FALSE)
+APP_DIR     <- if (dir.exists(PROJECT_DIR)) PROJECT_DIR else if (dir.exists(LOCAL_DIR)) LOCAL_DIR else getwd()
+env_file    <- file.path(APP_DIR, ".env")
 if (file.exists(env_file)) {
   env_lines <- readLines(env_file, warn = FALSE)
   for (line in env_lines) {
@@ -484,7 +487,7 @@ ui <- dashboardPage(
         ),
 
         fluidRow(
-          box(title = "📊 Siniflər üzrə Standart Sayı", width = 8, 
+          box(title = "📊 Siniflər üzrə Standart Sayı", width = 8,
               status = "primary", solidHeader = TRUE,
               plotlyOutput("chart_sinifler", height = "400px")),
           box(title = "ℹ️ Layihə Haqqında", width = 4, status = "info", solidHeader = TRUE,
@@ -502,6 +505,14 @@ ui <- dashboardPage(
                 tags$p("🇫🇮 Finlandiya • 🇸🇬 Sinqapur • 🇪🇪 Estoniya"),
                 tags$p("🇯🇵 Yaponiya • 🇨🇦 Kanada • 🇮🇪 İrlandiya")
               ))
+        ),
+        fluidRow(
+          box(title = "📋 Məzmun Sahələri üzrə Standart Sayı", width = 6,
+              status = "primary", solidHeader = TRUE,
+              plotlyOutput("chart_mezmun_home", height = "350px")),
+          box(title = "📈 Dəyişiklik Növləri", width = 6,
+              status = "warning", solidHeader = TRUE,
+              plotlyOutput("chart_deyisiklik_home", height = "350px"))
         )
       ),
       
@@ -867,6 +878,70 @@ server <- function(input, output, session) {
              font = list(family = "Noto Sans"))
   })
   
+  # --- ANA SƏHİFƏ: Məzmun sahələri diaqramı (sinifə görə) ---
+  output$chart_mezmun_home <- renderPlotly({
+    stats_refresh()
+    sinif <- as.integer(input$sinif_sec)
+    df <- tryCatch({
+      if (USE_CSV) {
+        f <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
+        if (!file.exists(f)) return(data.frame())
+        d <- read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+        d[d$sinif == sinif, , drop = FALSE]
+      } else {
+        con <- get_con(); on.exit(dbDisconnect(con))
+        dbGetQuery(con, paste0("SELECT * FROM yekun_standartlar WHERE sinif = ", sinif))
+      }
+    }, error = function(e) data.frame())
+    # Yekun boşdursa, mövcud standartlardan göstər
+    if (nrow(df) == 0) {
+      df <- tryCatch({
+        con <- get_con()
+        res <- dbGetQuery(con, paste0("SELECT mezmun_xetti FROM movcud_standartlar WHERE sinif = ", sinif))
+        dbDisconnect(con)
+        res
+      }, error = function(e) data.frame())
+    }
+    if (nrow(df) == 0) return(plotly_empty(type = "bar"))
+    mezmun_col <- if ("mezmun_sahesi" %in% names(df)) df$mezmun_sahesi else if ("mezmun_xetti" %in% names(df)) df$mezmun_xetti else rep("", nrow(df))
+    mezmun_col <- mezmun_col[!is.na(mezmun_col) & nchar(mezmun_col) > 0]
+    if (length(mezmun_col) == 0) return(plotly_empty(type = "bar"))
+    counts <- as.data.frame(table(mezmun_col), stringsAsFactors = FALSE)
+    names(counts) <- c("mezmun", "say")
+    plot_ly(counts, x = ~mezmun, y = ~say, type = "bar",
+            marker = list(color = "#1976D2")) %>%
+      layout(xaxis = list(title = ""), yaxis = list(title = "Say"),
+             title = list(text = paste0(sinif, "-ci sinif"), font = list(size = 14)),
+             font = list(family = "Noto Sans"))
+  })
+
+  # --- ANA SƏHİFƏ: Dəyişiklik növləri diaqramı (sinifə görə) ---
+  output$chart_deyisiklik_home <- renderPlotly({
+    stats_refresh()
+    sinif <- as.integer(input$sinif_sec)
+    df <- tryCatch({
+      if (USE_CSV) {
+        f <- file.path(getwd(), "data", "yekun_standartlar_backup.csv")
+        if (!file.exists(f)) return(data.frame())
+        d <- read.csv(f, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+        d[d$sinif == sinif, , drop = FALSE]
+      } else {
+        con <- get_con(); on.exit(dbDisconnect(con))
+        dbGetQuery(con, paste0("SELECT * FROM yekun_standartlar WHERE sinif = ", sinif))
+      }
+    }, error = function(e) data.frame())
+    if (nrow(df) == 0 || !"status" %in% names(df)) return(plotly_empty(type = "pie"))
+    status_labels <- c("deyismeyib" = "Dəyişməyib", "yenilenib" = "Yenilənib", "yeni_yazilmis" = "Yeni yazılıb", "silinib" = "Silinib")
+    counts <- table(df$status)
+    labels <- sapply(names(counts), function(s) if (s %in% names(status_labels)) status_labels[s] else s)
+    colors <- c("deyismeyib" = "#90CAF9", "yenilenib" = "#4CAF50", "yeni_yazilmis" = "#FF9800", "silinib" = "#F44336")
+    plot_ly(labels = labels, values = as.numeric(counts), type = "pie",
+            marker = list(colors = colors[names(counts)]),
+            textinfo = "label+percent") %>%
+      layout(title = list(text = paste0(sinif, "-ci sinif"), font = list(size = 14)),
+             font = list(family = "Noto Sans"))
+  })
+
   # --- Statistika üçün yekun datası (bütün siniflər) ---
   data_yekun_all <- reactive({
     stats_refresh()  # AI yazdıqdan sonra yenilənsin

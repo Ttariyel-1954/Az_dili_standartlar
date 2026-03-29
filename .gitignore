@@ -1,6 +1,43 @@
-.env
+# === OS ===
+.DS_Store
+Thumbs.db
+*~
+
+# === R ===
 .Rhistory
 .RData
-.Rproj.user
+.Rproj.user/
+*.Rproj
+
+# === Secrets ===
+.env
+.Renviron
+
+# === Backups ===
+*.bak
+*.bak_*
+*.backup_*
+*.backup
+*.old
+
+# === Temp ===
+tmp/
+temp/
+*.log
+nohup.out
+
+# === Node ===
 node_modules/
-.DS_Store
+package-lock.json
+
+# === Generated outputs ===
+html_reports/*.html
+word_reports/*.docx
+Son_Exsel/*.xlsx
+
+# === Deploy ===
+rsconnect/
+
+# === IDE ===
+.idea/
+.vscode/

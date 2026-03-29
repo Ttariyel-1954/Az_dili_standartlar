@@ -236,7 +236,7 @@ Addım 3 bazaya yazanda:
 
 ### İlkin quraşdırma (bir dəfə):
 ```bash
-cd ~/Desktop/Az_dili_standartlar
+cd ~/projects/standards/Az_dili_standartlar
 Rscript install.R                              # R paketlərini quraşdır
 psql -U royatalibova -d az_muellim_db -f sql/create_tables.sql  # Cədvəlləri yarat
 Rscript scripts/01_db_export.R                 # Az_agent-dən məlumat köçür
@@ -244,7 +244,7 @@ Rscript scripts/01_db_export.R                 # Az_agent-dən məlumat köçür
 
 ### Dashboard-u işə salmaq:
 ```bash
-cd ~/Desktop/Az_dili_standartlar
+cd ~/projects/standards/Az_dili_standartlar
 Rscript -e "shiny::runApp('app.R', port=4567, host='0.0.0.0')"
 ```
 Dashboard açılacaq: http://localhost:4567
