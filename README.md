@@ -1,14 +1,36 @@
 # Azərbaycan Dili Standartlarının Yenilənməsi Layihəsi
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ttariyel-1954/Az_dili_standartlar/HEAD?urlpath=shiny/app.R/)
+[![R](https://img.shields.io/badge/R-4.2+-blue.svg)](https://www.r-project.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
+[![Claude](https://img.shields.io/badge/AI-Claude%20Sonnet%204-purple.svg)](https://www.anthropic.com/)
 
-**Azərbaycan Respublikasında 1-11-ci siniflər üzrə Azərbaycan dili fənninin mövcud standart və alt standartlarını beynəlxalq tələblərə uyğun təhlil edən, yeniləyən və təkmilləşdirən süni intellekt əsaslı R Shiny dashboard.**
+**Azərbaycan Respublikasında 1-11-ci siniflər üzrə Azərbaycan dili fənninin mövcud 442 alt standartını beynəlxalq tələblərə uyğun təhlil edən, yeniləyən və təkmilləşdirən süni intellekt əsaslı R Shiny dashboard.**
+
+---
+
+## Mündəricat
+
+- [Layihənin Məqsədi](#layihənin-məqsədi)
+- [Beynəlxalq Çərçəvələr](#beynəlxalq-çərçəvələr)
+- [3 Addımlı AI İş Axını](#3-addımlı-ai-iş-axını)
+- [Dashboard Tabları](#dashboard-tabları)
+- [Mövcud Standartlar Bazası](#mövcud-standartlar-bazası)
+- [Texniki Stek](#texniki-stek)
+- [Verilənlər Bazası Strukturu](#verilənlər-bazası-strukturu)
+- [Layihə Strukturu](#layihə-strukturu)
+- [Quraşdırma](#quraşdırma)
+- [CSV Backup-dan Bərpa Etmə](#csv-backup-dan-bərpa-etmə)
+- [İstifadə Qaydası](#istifadə-qaydası)
+- [Təhlükəsizlik](#təhlükəsizlik)
+- [Onlayn Platformalar](#onlayn-platformalar)
+- [Layihə Rəhbəri](#layihə-rəhbəri)
 
 ---
 
 ## Layihənin Məqsədi
 
-Bu layihə Azərbaycan dili fənn kurikulumunun mövcud standartlarını müasir beynəlxalq tələblərə uyğunlaşdırmaq üçün yaradılıb. Layihənin əsas məqsədləri:
+Bu layihə Azərbaycan dili fənn kurikulumunun mövcud standartlarını müasir beynəlxalq tələblərə uyğunlaşdırmaq üçün yaradılıb. Əsas məqsədlər:
 
 - **Mövcud standartların təhlili** — 1-11-ci siniflərdə 442 alt standartın hər birini beynəlxalq çərçəvələr əsasında qiymətləndirmək
 - **Zəif standartların yenilənməsi** — müasir tələblərə cavab verməyən standartları Claude AI vasitəsilə yenidən yazmaq
@@ -19,8 +41,6 @@ Bu layihə Azərbaycan dili fənn kurikulumunun mövcud standartlarını müasir
 ---
 
 ## Beynəlxalq Çərçəvələr
-
-Layihədə aşağıdakı beynəlxalq standart və çərçəvələrdən istifadə olunur:
 
 ### PISA — Oxu Savadlılığı (Beynəlxalq Şagird Qiymətləndirmə Proqramı)
 - **Məlumat əldə etmə və axtarış** — mətndə konkret informasiyanın tapılması
@@ -37,6 +57,7 @@ Layihədə aşağıdakı beynəlxalq standart və çərçəvələrdən istifadə
 - **PIRLS 2026:** rəqəmsal mətnlər, onlayn oxu strategiyaları
 
 ### CEFR — Avropa Dil Çərçəvəsi (A1-C1)
+
 | Səviyyə | Siniflər | Təsvir |
 |---------|----------|--------|
 | A1 | 1-2-ci sinif | İbtidai istifadəçi — əsas ifadələr, sadə cümlələr |
@@ -46,7 +67,6 @@ Layihədə aşağıdakı beynəlxalq standart və çərçəvələrdən istifadə
 | C1 | 10-11-ci sinif | Təcrübəli istifadəçi — geniş, mürəkkəb mətnlərin dərki |
 
 ### Bloom Taksonomiyası (Yenilənmiş)
-Hər standart Bloom taksonomiyasının müvafiq səviyyəsi ilə etiketlənir:
 1. **Xatırlama** — faktları, anlayışları yadda saxlama
 2. **Anlama** — mənasını izah etmə, nümunə gətirmə
 3. **Tətbiq etmə** — öyrənilmişi yeni vəziyyətdə istifadə
@@ -56,10 +76,8 @@ Hər standart Bloom taksonomiyasının müvafiq səviyyəsi ilə etiketlənir:
 
 ### Aparıcı 6 Ölkənin Təcrübəsi
 
-Azərbaycan dili standartları dünya ölkələrinin ən yaxşı təcrübələri ilə müqayisə olunur:
-
 | Ölkə | Əsas yanaşma |
-|------|-------------|
+|------|--------------|
 | **Finlandiya** | Fənlərarası oxu, çoxsaylı mətn növləri, media savadlılığı, müstəqil düşüncə |
 | **Sinqapur** | STELLAR proqramı, kommunikativ dil öyrənməsi, kritik düşüncə inkişafı |
 | **Estoniya** | Rəqəmsal savadlılıq, mədəniyyətlərarası kommunikasiya, texnoloji inteqrasiya |
@@ -69,88 +87,45 @@ Azərbaycan dili standartları dünya ölkələrinin ən yaxşı təcrübələri
 
 ---
 
-## 3 Addımlı İş Axını (AI Təhlil)
-
-Layihənin ürəyi olan Claude AI Təhlil tabı 3 addımlı interaktiv iş axını ilə işləyir:
+## 3 Addımlı AI İş Axını
 
 ### Addım 1: AI Təhlili
 1. İstifadəçi **sinif** (1-11) və **məzmun xətti** (Dinləmə, Danışma, Oxu, Yazı, Dil qaydaları) seçir
 2. Claude AI seçilmiş standartları PISA, PIRLS, CEFR, Bloom və 6 ölkə təcrübəsi əsasında təhlil edir
 3. Hər standart üçün status təyin olunur:
-   - 🟢 **QALSIN** — standart beynəlxalq tələblərə uyğundur, dəyişiklik tələb etmir
+   - 🟢 **QALSIN** — standart beynəlxalq tələblərə uyğundur
    - 🟠 **YENİLƏNSİN** — standart təkmilləşdirmə tələb edir
-   - 🔴 **SİLİNSİN** — standart artıq lazım deyil (nadir hallarda)
+   - 🔴 **SİLİNSİN** — standart artıq lazım deyil
    - 🔵 **YENİ TƏKLİF** — AI-nin təklif etdiyi yeni standartlar
-4. Nəticə rəngli kartlarla ekranda göstərilir
-5. HTML hesabat avtomatik `html_reports/` qovluğuna yazılır
+4. HTML hesabat avtomatik `html_reports/` qovluğuna yazılır
 
 ### Addım 2: İnteraktiv Seçim və Yenidən Yazma
-1. Yalnız dəyişiklik tələb edən standartlar yüklənir (qalacaqlar gizlədilir)
-2. İstifadəçi hər standart üçün son qərar verir:
-   - **Saxla** — dəyişiklikdən imtina (status: mövcud)
-   - **Yenilə** — AI yenidən yazsın (status: yenilənsin)
-   - **Sil** — standart silinsin (status: silinsin)
-3. **"AI ilə yenilə"** düyməsi basıldıqda Claude yalnız seçilmiş standartların yeni mətnini yazır
-4. Yenilənmiş standartlar yaşıl rənglə vurğulanır
+1. Yalnız dəyişiklik tələb edən standartlar yüklənir
+2. İstifadəçi hər standart üçün son qərar verir: **Saxla / Yenilə / Sil**
+3. **"AI ilə yenilə"** düyməsi ilə Claude seçilmiş standartların yeni mətnini yazır
 
 ### Addım 3: Bazaya Saxlama
 - Bütün nəticələr PostgreSQL bazasına yazılır
-- Statuslar avtomatik yekun dəyərlərinə çevrilir:
-  - `yenilensin` → `yenilenib`
-  - `silinsin` → `silinib`
-  - `qalsin` → `movcud`
-- Əvvəlki qeydlər silinir, yerinə yeniləri yazılır
+- Statuslar avtomatik yekun dəyərlərinə çevrilir
 
 ---
 
 ## Dashboard Tabları
 
-### 1. Ana Səhifə
-- Seçilmiş sinif üzrə statistik göstəricilər (value box)
-- Ümumi standart sayı, yenilənmiş, yeni əlavə, silinmiş sayları
-- Bütün siniflər üzrə yekun diaqram (Plotly stack bar chart)
-
-### 2. Mövcud Standartlar
-- Orijinal kurikulum standartlarının tam cədvəli (442 ədəd)
-- Standart kodu, məzmun sahəsi, standart mətni
-- Sinif və məzmun sahəsi üzrə filtr
-
-### 3. Müqayisə
-- Köhnə və yeni standartların yan-yana müqayisəsi
-- Yalnız dəyişiklik olan standartlar göstərilir
-- Rəngli vurğulama: yaşıl (yenilənib), narıncı (yeni), qırmızı (silinib)
-
-### 4. Yekun Standartlar
-- Tam yekun cədvəl: kod, məzmun sahəsi, status, standart, əsaslandırma
-- Rəngli sətir fonu ilə statusların ayrılması
-- CSV və Excel formatında ixrac imkanı
-
-### 5. Beynəlxalq
-- PISA, PIRLS, CEFR uyğunluq cədvəli
-- 6 aparıcı ölkənin standartları ilə müqayisə
-- Bloom taksonomiyası paylanması
-
-### 6. Statistika
-- Dəyişiklik növləri üzrə dairəvi diaqram
-- Məzmun xətləri üzrə sütun diaqramı
-- CEFR və Bloom səviyyələri üzrə qrafiklər
-- Plotly ilə interaktiv vizuallaşdırma
-
-### 7. Claude AI Təhlil
-- 3 addımlı iş axını (yuxarıda ətraflı təsvir olunub)
-- Canlı taymer, token istifadəsi izləmə, xərc hesabı
-- Hər addımda vizual geri əlaqə
-
-### 8. Export (İxrac)
-- **HTML hesabat** — nəfis rəngli cədvəl, çap üçün hazır
-- **CSV data** — elektron cədvəl proqramları üçün
-- **Word (DOCX)** — redaktə oluna bilən, landscape formatda, rəngli cədvəl
+| Tab | Məzmun |
+|-----|--------|
+| **1. Ana Səhifə** | Value box-lar, ümumi statistika, diaqram |
+| **2. Mövcud Standartlar** | Orijinal 442 standartın cədvəli |
+| **3. Müqayisə** | Köhnə vs yeni standartların yan-yana müqayisəsi |
+| **4. Yekun Standartlar** | Tam yekun cədvəl + rəngli statuslar |
+| **5. Beynəlxalq** | PISA/PIRLS/CEFR + 6 ölkə standartları |
+| **6. Statistika** | Plotly ilə interaktiv diaqramlar |
+| **7. Claude AI Təhlil** | 3 addımlı iş axını + taymer + token istifadəsi |
+| **8. Export** | HTML, CSV və Word (DOCX) ixracı |
 
 ---
 
 ## Mövcud Standartlar Bazası
-
-1-11-ci siniflər üzrə cəmi **442 alt standart** mövcuddur:
 
 | Sinif | Alt standart sayı | CEFR səviyyəsi |
 |-------|-------------------|----------------|
@@ -176,7 +151,7 @@ Layihənin ürəyi olan Claude AI Təhlil tabı 3 addımlı interaktiv iş axın
 | Komponent | Texnologiya |
 |-----------|-------------|
 | **Proqramlaşdırma dili** | R (>= 4.2) |
-| **Verilənlər bazası** | PostgreSQL (`az_muellim_db`) + CSV yedək |
+| **Verilənlər bazası** | PostgreSQL (`az_dili_standartlar`) |
 | **Veb interfeys** | R Shiny + shinydashboard |
 | **Süni intellekt** | Claude API (Anthropic) — Claude Sonnet 4 |
 | **İnteraktiv cədvəl** | DT (DataTables) |
@@ -190,27 +165,33 @@ Layihənin ürəyi olan Claude AI Təhlil tabı 3 addımlı interaktiv iş axın
 
 ## Verilənlər Bazası Strukturu
 
-### movcud_standartlar
-Azərbaycan dili kurikulumunun rəsmi standartları (442 ədəd):
-- `kod` — Standart kodu (məs: Az_dili_I_1.1.1)
-- `sinif` — Sinif nömrəsi (1-11)
-- `mezmun_xetti` — Məzmun sahəsi (Dinləmə, Danışma, Oxu, Yazı, Dil qaydaları)
-- `standart_metni` — Əsas standart mətni
-- `alt_standart_metni` — Alt standart mətni
+Baza adı: `az_dili_standartlar`
 
-### yenilenmi_standartlar
-AI tərəfindən təhlil olunmuş və yenilənmiş standartlar:
-- `kod` — Standart kodu
-- `mezmun_sahesi` — Məzmun sahəsi
-- `status` — `movcud` / `yenilenib` / `yeni` / `silinib`
-- `standart_metni` — Yekun standart mətni
-- `xarakteristika` — Əsaslandırma (beynəlxalq istinad ilə)
-- `kohne_standart_metni` — Köhnə mətn (müqayisə üçün)
-- `bloom_taksonomiyasi` — Bloom səviyyəsi
-- `pisa_elaqesi` — PISA uyğunluğu
-- `pirls_elaqesi` — PIRLS uyğunluğu
-- `cefr_seviyyesi` — CEFR səviyyəsi
-- `cetinlik_seviyyesi` — Çətinlik dərəcəsi
+### 5 Cədvəl + 1 View
+
+#### 1. `movcud_standartlar` (442 sətir)
+Azərbaycan dili kurikulumunun rəsmi standartları.
+
+**Əsas sütunlar:** `id`, `sinif`, `mezmun_xetti`, `standart_kodu`, `standart_metni`, `alt_standart_kodu`, `alt_standart_metni`, `pisa_seviyyesi`, `pirls_kateqoriya`, `bloom_seviyyesi`, `kod`
+
+#### 2. `yenilenmi_standartlar` (100 sətir)
+AI tərəfindən təhlil olunmuş və yenilənmiş standartlar.
+
+**Əsas sütunlar:** `deyisiklik_novu` (movcud/yenilenib/yeni/silinib), `kohne_metni`, `esaslandirma`, `beynelxalq_istinad`, `cefr_seviyyesi`, `olke_istinadi`, `versiya`, `status`
+
+#### 3. `yekun_standartlar`
+AI təhlilindən sonra final yekun cədvəl.
+
+**Əsas sütunlar:** `sinif`, `kod`, `mezmun_sahesi`, `bloom_taksonomiyasi`, `cetinlik_seviyyesi`, `status` (deyismeyib/yenilenib/yeni/silinib), `standart_metni`, `xarakteristika`, `kohne_standart_metni`
+
+#### 4. `beynelxalq_cerceveler`
+PISA, PIRLS, CEFR kateqoriyaları və təsvirləri.
+
+#### 5. `olke_standartlari`
+6 aparıcı ölkənin dil təhsili standartları.
+
+#### 6. `deyisiklik_jurnali`
+AI təhlili və dəyişikliklərin audit tarixçəsi.
 
 ---
 
@@ -220,23 +201,25 @@ AI tərəfindən təhlil olunmuş və yenilənmiş standartlar:
 Az_dili_standartlar/
 ├── app.R                       # Əsas R Shiny dashboard (UI + server)
 ├── .env                        # API açarları və baza konfiqurasiyası (git-ə daxil deyil)
+├── .Renviron                   # R environment dəyişənləri
 ├── .gitignore                  # Git ignore qaydaları
 ├── CLAUDE.md                   # Layihə təlimatları (texniki sənəd)
 ├── README.md                   # Bu fayl
+├── TELIMAT.html                # İstifadəçi təlimatı (HTML)
 ├── install.R                   # R paketlərinin quraşdırılması
 ├── runtime.txt                 # R versiyası (Binder üçün)
 ├── apt.txt                     # Sistem paketləri (Binder üçün)
 ├── setup.sh                    # İlkin quraşdırma skripti
 ├── data/
 │   ├── movcud_standartlar_backup.csv     # 442 standart (CSV yedək)
+│   ├── yenilenmi_standartlar_backup.csv  # 100 yenilənmiş standart
 │   └── yekun_standartlar_backup.csv      # Yekun nəticə yedəyi
-├── html_reports/                # AI təhlil nəticələri (HTML hesabatlar)
-│   └── sinif_N_mezmun_xetti.html
-├── word_reports/                # Yekun standartlar (Word/DOCX)
-├── Son_Exsel/                   # Yekun standartlar (Excel formatda)
+├── html_reports/               # AI təhlil nəticələri (HTML)
+├── word_reports/               # Yekun standartlar (Word/DOCX)
+├── Son_Exsel/                  # Yekun standartlar (Excel)
 ├── scripts/
 │   ├── 01_db_export.R          # Az_agent bazasından standart köçürmə
-│   ├── 02_update_standards.R   # Claude API ilə standart yeniləmə (batch)
+│   ├── 02_update_standards.R   # Claude API ilə standart yeniləmə
 │   └── 03_generate_html.R      # HTML hesabat generasiyası
 └── sql/
     └── create_tables.sql       # PostgreSQL baza cədvəlləri sxemi
@@ -252,7 +235,7 @@ Az_dili_standartlar/
 - **Anthropic API açarı** (Claude API)
 - R paketləri: `shiny`, `shinydashboard`, `DBI`, `RPostgres`, `DT`, `httr`, `jsonlite`, `plotly`, `officer`, `flextable`
 
-### Quraşdırma Addımları
+### Yeni quraşdırma (sıfırdan)
 
 ```bash
 # 1. Repo-nu klonlayın
@@ -262,29 +245,107 @@ cd Az_dili_standartlar
 # 2. R paketlərini quraşdırın
 Rscript install.R
 
-# 3. .env faylını yaradın və ANTHROPIC_API_KEY daxil edin
+# 3. .env faylını yaradın
 cat > .env << 'EOF'
-ANTHROPIC_API_KEY=sk-ant-api03-SİZİN_AÇARINIZ
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=az_muellim_db
-DB_USER=postgres
-DB_PASSWORD=sizin_şifrəniz
+DB_NAME=az_dili_standartlar
+DB_USER=sizin_user_adiniz
+DB_PASSWORD=
+ANTHROPIC_API_KEY=sk-ant-api03-SİZİN_AÇARINIZ
 DEFAULT_AI_MODEL=claude-sonnet-4-20250514
 EOF
 
 # 4. PostgreSQL bazasını yaradın
-createdb az_muellim_db
-psql -U postgres -d az_muellim_db -f sql/create_tables.sql
+createdb az_dili_standartlar
+psql -d az_dili_standartlar -f sql/create_tables.sql
 
-# 5. Mövcud standartları bazaya import edin
-Rscript scripts/01_db_export.R
-
-# 6. Dashboard-u işə salın
+# 5. Dashboard-u işə salın
 Rscript -e "shiny::runApp('app.R', port=4567, host='0.0.0.0')"
 ```
 
 Brauzer: **http://localhost:4567**
+
+---
+
+## CSV Backup-dan Bərpa Etmə
+
+Əgər lokal baza itibsə və yalnız CSV yedəklər qalıbsa, bərpa prosesi:
+
+### Addım 1: Bazanı və cədvəlləri yarat
+
+```bash
+cd ~/projects/standards/Az_dili_standartlar
+
+# Bazanı yarat
+createdb az_dili_standartlar
+
+# Cədvəlləri yarat
+psql -d az_dili_standartlar -f sql/create_tables.sql
+```
+
+### Addım 2: `movcud_standartlar` cədvəlini hazırlamaq
+
+Əlavə sütunlar əlavə et (CSV-dəki 4 əlavə sütun üçün):
+
+```sql
+ALTER TABLE movcud_standartlar
+  ADD COLUMN pisa_seviyyesi VARCHAR(10),
+  ADD COLUMN pirls_kateqoriya VARCHAR(100),
+  ADD COLUMN bloom_seviyyesi VARCHAR(50),
+  ADD COLUMN kod VARCHAR(50);
+```
+
+### Addım 3: CSV-ləri yüklə
+
+```bash
+# 442 mövcud standart
+psql -d az_dili_standartlar -c "\copy movcud_standartlar FROM 'data/movcud_standartlar_backup.csv' WITH (FORMAT csv, HEADER true);"
+
+# 100 yenilənmiş standart
+psql -d az_dili_standartlar -c "\copy yenilenmi_standartlar FROM 'data/yenilenmi_standartlar_backup.csv' WITH (FORMAT csv, HEADER true, NULL 'NA');"
+```
+
+### Addım 4: `yekun_standartlar` cədvəlini yarat
+
+App bu cədvəli **view** kimi yox, **cədvəl** kimi istifadə edir (INSERT əməliyyatı aparır):
+
+```sql
+CREATE TABLE yekun_standartlar (
+  id SERIAL PRIMARY KEY,
+  sinif INTEGER NOT NULL,
+  kod VARCHAR(50),
+  mezmun_sahesi VARCHAR(100),
+  bloom_taksonomiyasi VARCHAR(50),
+  cetinlik_seviyyesi VARCHAR(20),
+  status VARCHAR(30),
+  standart_metni TEXT,
+  xarakteristika TEXT,
+  kohne_standart_metni TEXT,
+  yaradilma_tarixi TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_yekun_sinif ON yekun_standartlar(sinif);
+CREATE INDEX idx_yekun_status ON yekun_standartlar(status);
+```
+
+### Addım 5: `yekun_standartlar`-ı doldur
+
+```bash
+psql -d az_dili_standartlar -c "\copy yekun_standartlar FROM 'data/yekun_standartlar_backup.csv' WITH (FORMAT csv, HEADER true, NULL 'NA');"
+```
+
+### Addım 6: Yoxla
+
+```bash
+psql -d az_dili_standartlar -c "
+  SELECT 'movcud' AS cedvel, COUNT(*) FROM movcud_standartlar UNION ALL
+  SELECT 'yenilenmi', COUNT(*) FROM yenilenmi_standartlar UNION ALL
+  SELECT 'yekun', COUNT(*) FROM yekun_standartlar;
+"
+```
+
+Gözlənilən nəticə: 442 / 100 / (yekun sayı).
 
 ---
 
@@ -302,13 +363,30 @@ Brauzer: **http://localhost:4567**
 
 ---
 
+## Təhlükəsizlik
+
+### API açarları
+- **Heç vaxt** `.env` və ya `.Renviron` fayllarını git-ə commit etməyin
+- `.gitignore` faylı bu faylları avtomatik istisna edir
+- API açarı sızırsa, dərhal [console.anthropic.com](https://console.anthropic.com) saytından **revoke** edin və yenisini yaradın
+
+### Baza şifrələri
+- PostgreSQL şifrəsini güclü saxlayın
+- Lokal development-də `trust` autentifikasiya məqbuldur, production-da `md5` və ya `scram-sha-256` istifadə edin
+
+### Backup
+- CSV backup faylları (`data/` qovluğunda) **dəyərlidir** — onları git-də saxlayın
+- Hər AI təhlilindən sonra CSV ixrac edin: `Export` → CSV
+
+---
+
 ## Onlayn Platformalar
 
 | Platforma | Keçid |
 |-----------|-------|
 | **GitHub** | [github.com/Ttariyel-1954/Az_dili_standartlar](https://github.com/Ttariyel-1954/Az_dili_standartlar) |
 | **ShinyApps.io** | [t01061954.shinyapps.io/Az_dili_standartlar](https://t01061954.shinyapps.io/Az_dili_standartlar/) |
-| **Binder** | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ttariyel-1954/Az_dili_standartlar/HEAD?urlpath=shiny/app.R/) |
+| **Binder** | [mybinder.org](https://mybinder.org/v2/gh/Ttariyel-1954/Az_dili_standartlar/HEAD?urlpath=shiny/app.R/) |
 
 ---
 
